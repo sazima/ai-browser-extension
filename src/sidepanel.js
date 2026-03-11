@@ -122,11 +122,15 @@ messageInput.addEventListener("keydown", (e) => {
 sendBtn.addEventListener("click", sendMessage);
 
 // ── 停止按钮 ────────────────────────────────────────────
-stopBtn.addEventListener("click", async () => {
+stopBtn.addEventListener("click", () => {
   chrome.runtime.sendMessage({ type: "stop_agent" });
-  stopBtn.disabled = true;
-  stopBtn.textContent = "...";
-  // setRunning(false) 会在收到 reply 消息时触发
+  // 立即更新 UI，无需等待 background 确认
+  removeThinking();
+  finalizeSteps();
+  appendAssistantMessage(t("stopped"));
+  setRunning(false);
+  currentStepsContainer = null;
+  scrollToBottom();
 });
 
 // ── 发送消息 ────────────────────────────────────────────

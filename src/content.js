@@ -584,6 +584,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     case "find_by_text":
       result = findByText(params.text);
       break;
+    case "clear_overlay":
+      clearOverlay();
+      result = { success: true };
+      break;
     default:
       result = { success: false, error: `未知 action: ${action}` };
   }

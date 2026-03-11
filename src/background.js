@@ -390,8 +390,12 @@ async function waitForPageLoad(tabId, timeoutMs = 20000) {
 /**
  * 向 sidepanel 发送进度消息（用于实时显示 AI 在做什么）
  */
-function sendProgress(type, content) {
+function sendProgress(type, content, tabId) {
   chrome.runtime.sendMessage({ type, content }).catch(() => {});
+  // 任务结束时清除页面上的元素编号覆盖层
+  if ((type === "reply" || type === "error") && tabId) {
+    chrome.tabs.sendMessage(tabId, { action: "clear_overlay" }).catch(() => {});
+  }
 }
 
 /**
@@ -484,6 +488,8 @@ async function executeTool(toolName, params, tabId) {
 
 // 全局停止标志（用户点击停止按钮时设为 true）
 let stopRequested = false;
+// 当前 API 请求的 AbortController，停止时用于立即中断 fetch
+let currentAbortController = null;
 
 /**
  * 检测是否是登录/验证页面
@@ -594,7 +600,7 @@ ${s.reply_lang}`;
   while (turn < maxTurns) {
     // 检查用户是否点击了停止
     if (stopRequested) {
-      sendProgress("reply", s.stopped);
+      sendProgress("reply", s.stopped, tabId);
       return;
     }
 
@@ -603,8 +609,10 @@ ${s.reply_lang}`;
     // 调用 DeepSeek API
     let response;
     try {
+      currentAbortController = new AbortController();
       const resp = await fetch(`${apiBase}/chat/completions`, {
         method: "POST",
+        signal: currentAbortController.signal,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
@@ -625,13 +633,15 @@ ${s.reply_lang}`;
 
       response = await resp.json();
     } catch (e) {
-      sendProgress("error", s.api_error(e.message));
+      // AbortError 是用户主动停止，不算错误，静默退出
+      if (e.name === "AbortError" || stopRequested) return;
+      sendProgress("error", s.api_error(e.message), tabId);
       return;
     }
 
     // 再次检查停止（API 调用耗时，期间用户可能点了停止）
     if (stopRequested) {
-      sendProgress("reply", s.stopped);
+      sendProgress("reply", s.stopped, tabId);
       return;
     }
 
@@ -650,7 +660,7 @@ ${s.reply_lang}`;
     if (stopReason === "tool_calls" && msg.tool_calls) {
       for (const toolCall of msg.tool_calls) {
         if (stopRequested) {
-          sendProgress("reply", s.stopped);
+          sendProgress("reply", s.stopped, tabId);
           return;
         }
 
@@ -693,7 +703,7 @@ ${s.reply_lang}`;
             const navCount = navigatedUrls.filter((u) => u === destUrl).length;
             if (navCount >= MAX_NAV_REPEATS) {
               sendProgress("warn", s.nav_loop_warn(destUrl, navCount));
-              sendProgress("reply", s.nav_loop(destUrl));
+              sendProgress("reply", s.nav_loop(destUrl), tabId);
               return;
             }
           } catch {
@@ -741,9 +751,9 @@ ${s.reply_lang}`;
                 if (finalResp.ok) {
                   const finalData = await finalResp.json();
                   const finalMsg = finalData.choices[0]?.message?.content;
-                  sendProgress("reply", finalMsg || s.login_required);
+                  sendProgress("reply", finalMsg || s.login_required, tabId);
                 } else {
-                  sendProgress("reply", s.login_required);
+                  sendProgress("reply", s.login_required, tabId);
                 }
               }
               return;
@@ -756,7 +766,7 @@ ${s.reply_lang}`;
               samePageCount++;
               if (samePageCount >= MAX_SAME_PAGE) {
                 sendProgress("warn", s.same_page_warn(MAX_SAME_PAGE));
-                sendProgress("reply", s.same_page(parsed.url));
+                sendProgress("reply", s.same_page(parsed.url), tabId);
                 return;
               }
             } else {
@@ -782,16 +792,16 @@ ${s.reply_lang}`;
 
     // ── 最终回复 ──
     if (stopReason === "stop") {
-      sendProgress("reply", msg.content || s.task_done);
+      sendProgress("reply", msg.content || s.task_done, tabId);
       return;
     }
 
     // 异常情况
-    sendProgress("reply", s.done_turns(turn));
+    sendProgress("reply", s.done_turns(turn), tabId);
     return;
   }
 
-  sendProgress("reply", s.max_turns(maxTurns));
+  sendProgress("reply", s.max_turns(maxTurns), tabId);
 }
 
 /**
@@ -819,7 +829,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "run_agent") {
     const { userMessage, tabId, apiKey, baseUrl, maxTurns, language } = message;
     runAgentLoop(userMessage, tabId, apiKey, baseUrl, maxTurns, language).catch((e) => {
-      sendProgress("error", bgT(language).agent_error(e.message));
+      sendProgress("error", bgT(language).agent_error(e.message), tabId);
     });
     sendResponse({ started: true });
     return true;
@@ -827,6 +837,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message.type === "stop_agent") {
     stopRequested = true;
+    // 立即中断正在进行的 API fetch，无需等待超时
+    currentAbortController?.abort();
+    currentAbortController = null;
     sendResponse({ stopped: true });
     return true;
   }
