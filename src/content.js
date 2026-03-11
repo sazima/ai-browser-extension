@@ -245,6 +245,11 @@ function detectPopupsWithCounter(startId) {
 }
 
 function readPage() {
+  const t0 = performance.now();
+  const perf = (label) => {
+    console.log(`[AI-readPage] ${label}: ${(performance.now() - t0).toFixed(1)}ms`);
+  };
+
   elementMap.clear();
   let counter = 1;
 
@@ -271,17 +276,29 @@ function readPage() {
   const navElements = [];
   const otherElements = [];
 
-  document.querySelectorAll(selectors).forEach((el) => {
-    if (!isVisible(el)) return;
+  // 原始元素超过 600 时提前截断，避免在 YouTube 等重页面上遍历数千元素卡死
+  const RAW_CAP = 600;
+  const rawList = Array.from(document.querySelectorAll(selectors));
+  perf(`querySelectorAll done (${rawList.length} raw elements)`);
+  const capped = rawList.length > RAW_CAP ? rawList.slice(0, RAW_CAP) : rawList;
+
+  // 只对表单控件调用 getFieldLabel（含 cloneNode，开销大）
+  const FORM_TAGS = new Set(["input", "textarea", "select"]);
+
+  for (const el of capped) {
+    if (!isVisible(el)) continue;
 
     const text = getElementText(el);
     const tag = el.tagName.toLowerCase();
     const type = el.getAttribute("type") || "";
     const href = el.href || "";
 
-    // label: 字段用途标签，帮助 LLM 理解元素作用；try-catch 防止复杂 DOM 卡住
+    // label 只在表单控件或 contenteditable 上提取，其他跳过
     let label = "";
-    try { label = getFieldLabel(el); } catch { /* 忽略 */ }
+    if (FORM_TAGS.has(tag) || el.isContentEditable) {
+      try { label = getFieldLabel(el); } catch { /* 忽略 */ }
+    }
+
     const info = {
       tag, type,
       text: text || `(${tag})`,
@@ -289,14 +306,15 @@ function readPage() {
       ...(label ? { label } : {}),
     };
 
-    // 判断是否在语义导航区（<nav> 或 role="navigation" 内）
     const inNav = el.closest('nav, [role="navigation"], header');
     if (inNav) {
       navElements.push({ el, info });
     } else {
       otherElements.push({ el, info });
     }
-  });
+  }
+
+  perf(`element loop done (nav=${navElements.length} other=${otherElements.length})`);
 
   // 先放导航区元素，再放其他元素，确保导航菜单不会被截断
   const allEntries = []; // { el, id, info }
@@ -315,12 +333,16 @@ function readPage() {
     try { renderOverlay(allEntries.slice(0, 120)); } catch { /* 忽略渲染错误 */ }
   }, 0);
 
-  // 提取页面主要文本（截断）
-  const bodyText = document.body.innerText
+  perf("elementMap built");
+
+  // 提取页面主要文本：用 textContent 避免触发整页 layout（innerText 会）
+  const bodyText = (document.body.textContent || "")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 3000);
+  perf("bodyText done");
 
+  perf(`TOTAL (${elements.length} elements → returning ${Math.min(elements.length, 120)})`);
   return {
     url: window.location.href,
     title: document.title,

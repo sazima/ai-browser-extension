@@ -68,7 +68,7 @@ saveApiKeyBtn.addEventListener("click", async () => {
     return;
   }
   const baseUrl = baseUrlInput.value.trim();
-  const maxTurns = parseInt(maxTurnsInput.value) || 25;
+  const maxTurns = parseInt(maxTurnsInput.value) || 60;
   const language = languageSelect.value;
 
   await chrome.storage.local.set({
@@ -181,7 +181,7 @@ async function sendMessage() {
     tabId: tab.id,
     apiKey: stored.deepseekApiKey,
     baseUrl: stored.baseUrl || "",
-    maxTurns: stored.maxTurns ?? 25,
+    maxTurns: stored.maxTurns ?? 60,
     language: currentLang,
   });
 }

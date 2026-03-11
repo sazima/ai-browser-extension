@@ -334,12 +334,14 @@ function sleep(ms) {
 function sendMessageWithTimeout(tabId, payload, timeoutMs) {
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
-      resolve(null); // 超时视为无响应
+      console.warn(`[AI] sendMessage timeout after ${timeoutMs}ms`, payload.action);
+      resolve(null);
     }, timeoutMs);
 
     chrome.tabs.sendMessage(tabId, payload, (response) => {
       clearTimeout(timer);
       if (chrome.runtime.lastError) {
+        console.warn(`[AI] sendMessage error:`, chrome.runtime.lastError.message);
         resolve(null);
       } else {
         resolve(response || { success: false, error: "无响应" });
@@ -349,22 +351,26 @@ function sendMessageWithTimeout(tabId, payload, timeoutMs) {
 }
 
 async function executeInPage(tabId, action, params = {}) {
-  const timeoutMs = action === "read_page" ? 12000 : 8000;
+  const timeoutMs = action === "read_page" ? 20000 : 8000;
+  console.log(`[AI] executeInPage start: ${action}`);
+  const t0 = Date.now();
 
   // 先尝试直接发消息（manifest 已自动注入 content.js 的情况）
   const direct = await sendMessageWithTimeout(tabId, { action, params }, timeoutMs);
+  console.log(`[AI] executeInPage first attempt: ${Date.now() - t0}ms, got=${direct !== null}`);
 
   if (direct !== null) return direct;
 
   // 无响应时手动注入一次（页面在扩展安装前就打开了）
   try {
-    await chrome.scripting.executeScript({ target: { tabId }, files: ["content.js"] });
+    await chrome.scripting.executeScript({ target: { tabId }, files: ["src/content.js"] });
   } catch (e) {
     return { success: false, error: `无法注入脚本: ${e.message}` };
   }
 
-  // 注入后重试，同样带超时
-  const retried = await sendMessageWithTimeout(tabId, { action, params }, timeoutMs);
+  // 注入后重试，超时缩短为 5s（第一次已经等过了，说明页面可能真的卡死）
+  const retried = await sendMessageWithTimeout(tabId, { action, params }, 5000);
+  console.log(`[AI] executeInPage retry: ${Date.now() - t0}ms total, got=${retried !== null}`);
   return retried ?? { success: false, error: "content script 无响应（超时）" };
 }
 
@@ -569,7 +575,7 @@ ${s.reply_lang}`;
   ];
 
   const apiBase = (baseUrl || "https://api.deepseek.com/v1").replace(/\/$/, "");
-  const maxTurns = Math.max(1, Math.min(parseInt(maxTurnsConfig) ?? 25, 100));
+  const maxTurns = Math.max(1, Math.min(parseInt(maxTurnsConfig) ?? 60, 100));
   console.log(`[AI助手] baseUrl=${apiBase} maxTurns=${maxTurns}`);
 
   let turn = 0;

@@ -2,6 +2,8 @@
 
 A Chrome extension that automates browser tasks using AI. Just describe what you want to do in natural language — the AI controls the browser and gets it done.
 
+English | [简体中文](./README.zh-CN.md) | [日本語](./README.ja.md) | [한국어](./README.ko.md)
+
 
 
 
@@ -28,10 +30,12 @@ https://github.com/user-attachments/assets/d07743f3-d033-450f-990c-80d5e0c423c8
 
 ### Manual Install (Developer Mode)
 
-1. Download or clone this repository
-2. Open Chrome and go to `chrome://extensions`
-3. Enable **Developer mode** (top right toggle)
-4. Click **Load unpacked** and select the extension folder
+1. **Download the code** — Click the green **Code** button on this page → **Download ZIP**, then unzip it. Or if you have Git: `git clone <repo-url>`
+2. Open Chrome and go to **`chrome://extensions`**
+3. Enable **Developer mode** using the toggle in the top-right corner
+4. Click **Load unpacked**
+5. Select the **`src`** folder inside the unzipped directory (not the root folder)
+6. The extension icon will appear in your Chrome toolbar — click it to open the side panel
 
 ## Setup
 
@@ -48,8 +52,6 @@ Open any webpage, then type your task in the chat box:
 ```
 Open GitHub user sazima's profile page and star one of their repos
 Check the weather in Singapore
-Search for the cheapest flight from Beijing to Shanghai tomorrow
-Fill out the registration form on this page
 ```
 
 The AI will show each step it's taking in real time. Click **■** to stop at any time.
@@ -60,7 +62,7 @@ The AI will show each step it's taking in real time. Click **■** to stop at an
 |---------|-------------|---------|
 | API Key | Your OpenAI-compatible API key | — |
 | API Base URL | API endpoint | `https://api.deepseek.com/v1` |
-| Max Steps | Maximum steps before auto-stop | 25 |
+| Max Steps | Maximum steps before auto-stop | 60 |
 | Language | UI and AI response language | Browser language |
 
 ## Permissions
