@@ -2,7 +2,13 @@
 
 A Chrome extension that automates browser tasks using AI. Just describe what you want to do in natural language — the AI controls the browser and gets it done.
 
-[![Watch the demo](https://img.youtube.com/vi/pFfuBNW9FmA/maxresdefault.jpg)](https://www.youtube.com/watch?v=pFfuBNW9FmA)
+
+
+
+https://github.com/user-attachments/assets/d07743f3-d033-450f-990c-80d5e0c423c8
+
+
+
 
 ## Features
 
