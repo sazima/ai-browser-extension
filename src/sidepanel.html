@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Browser Assistant</title>
+  <link rel="stylesheet" href="sidepanel.css" />
+</head>
+<body>
+  <!-- 顶部标题栏 -->
+  <header class="header">
+    <div class="header-title">
+      <span class="logo">🤖</span>
+      <span data-i18n="app.title">AI 浏览器助手</span>
+    </div>
+    <button class="settings-btn" id="settingsBtn" title="Settings">⚙️</button>
+  </header>
+
+  <!-- 设置面板（默认隐藏） -->
+  <div class="settings-panel" id="settingsPanel">
+    <div class="settings-content">
+      <h3 data-i18n="settings.title">设置</h3>
+
+      <label class="settings-label" data-i18n="settings.apikey.label">API Key</label>
+      <input type="password" id="apiKeyInput" class="settings-input" placeholder="sk-xxxxxxxxxxxxxxxx" data-i18n-placeholder="settings.apikey.placeholder" />
+      <div class="settings-hint" data-i18n="settings.apikey.hint">
+        兼容 OpenAI 格式的 Key（DeepSeek / OpenAI / 其他）
+      </div>
+
+      <label class="settings-label" style="margin-top:10px;" data-i18n="settings.baseurl.label">API Base URL</label>
+      <input type="text" id="baseUrlInput" class="settings-input" placeholder="https://api.deepseek.com/v1" data-i18n-placeholder="settings.baseurl.placeholder" />
+      <div class="settings-hint" data-i18n="settings.baseurl.hint">留空则使用 https://api.deepseek.com/v1</div>
+
+      <label class="settings-label" style="margin-top:10px;" data-i18n="settings.maxturns.label">最大轮数</label>
+      <input type="number" id="maxTurnsInput" class="settings-input" placeholder="25" min="1" max="100" style="width:80px;" />
+      <div class="settings-hint" data-i18n="settings.maxturns.hint">AI 最多执行多少步后强制停止（默认 25）</div>
+
+      <label class="settings-label" style="margin-top:10px;" data-i18n="settings.language.label">语言</label>
+      <select id="languageSelect" class="settings-input" style="width:auto;">
+        <option value="en">English</option>
+        <option value="zh-CN">简体中文</option>
+        <option value="zh-TW">繁體中文</option>
+        <option value="ja">日本語</option>
+        <option value="ko">한국어</option>
+      </select>
+
+      <button class="btn-save" id="saveApiKey" style="margin-top:12px;" data-i18n="settings.save">保存</button>
+    </div>
+  </div>
+
+  <!-- 聊天消息区域 -->
+  <main class="chat-container" id="chatContainer">
+    <!-- 欢迎消息 -->
+    <div class="welcome">
+      <div class="welcome-icon">🌐</div>
+      <div class="welcome-title" data-i18n="welcome.title">你好！我是 AI 浏览器助手</div>
+      <div class="welcome-desc" data-i18n="welcome.desc">
+        我可以帮你自动完成任何网页操作，例如：
+      </div>
+      <ul class="welcome-examples">
+        <li data-i18n="welcome.example1">帮我打开 GitHub 的 sazima 用户首页，并 Star 他的其中一个仓库</li>
+        <li data-i18n="welcome.example2">帮我查询新加坡的天气</li>
+      </ul>
+    </div>
+  </main>
+
+  <!-- 底部输入区域 -->
+  <footer class="input-area">
+    <div class="input-row">
+      <textarea
+        id="messageInput"
+        class="message-input"
+        placeholder="告诉我你想做什么..."
+        data-i18n-placeholder="input.placeholder"
+        rows="1"
+      ></textarea>
+      <button class="send-btn" id="sendBtn" title="Send">
+        <span id="sendIcon">➤</span>
+      </button>
+      <button class="stop-btn" id="stopBtn" title="Stop" style="display:none;">
+        ■
+      </button>
+    </div>
+    <div class="input-hint" id="inputHint" data-i18n="input.hint">
+      按 Enter 发送，Shift+Enter 换行
+    </div>
+  </footer>
+
+  <script src="i18n.js"></script>
+  <script src="sidepanel.js"></script>
+</body>
+</html>

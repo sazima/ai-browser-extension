@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head><title>Generate Icons</title></head>
+<body>
+<script>
+// 在浏览器中打开此文件，点击按钮生成图标
+function drawIcon(size) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+
+  // 背景
+  ctx.fillStyle = '#6366f1';
+  ctx.beginPath();
+  ctx.roundRect(0, 0, size, size, size * 0.2);
+  ctx.fill();
+
+  // 机器人图标（简化版）
+  ctx.fillStyle = 'white';
+  ctx.font = `bold ${size * 0.55}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🤖', size / 2, size / 2);
+
+  return canvas.toDataURL('image/png');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.createElement('button');
+  btn.textContent = 'Download Icons';
+  btn.onclick = () => {
+    [16, 48, 128].forEach(size => {
+      const dataUrl = drawIcon(size);
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `icon${size}.png`;
+      a.click();
+    });
+  };
+  document.body.appendChild(btn);
+});
+</script>
+<p>打开此 HTML 文件，点击按钮下载图标，然后放入 icons/ 目录</p>
+</body>
+</html>

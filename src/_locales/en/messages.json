@@ -1,0 +1,10 @@
+{
+  "appName": {
+    "message": "AI Browser Assistant",
+    "description": "Extension name"
+  },
+  "appDesc": {
+    "message": "AI-powered browser automation. Automate any web task with natural language.",
+    "description": "Extension description"
+  }
+}

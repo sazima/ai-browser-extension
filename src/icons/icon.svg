@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#3730a3"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a5b4fc"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 背景圆角方块 -->
+  <rect width="128" height="128" rx="26" fill="url(#bg)"/>
+
+  <!-- 光晕装饰 -->
+  <circle cx="100" cy="28" r="28" fill="#818cf8" opacity="0.15"/>
+  <circle cx="20" cy="100" r="22" fill="#6366f1" opacity="0.2"/>
+
+  <!-- 天线 -->
+  <rect x="61" y="14" width="6" height="20" rx="3" fill="white" opacity="0.9"/>
+  <circle cx="64" cy="12" r="5" fill="url(#glow)"/>
+
+  <!-- 机器人头部 -->
+  <rect x="26" y="34" width="76" height="58" rx="14" fill="white" opacity="0.97"/>
+
+  <!-- 耳朵 -->
+  <rect x="16" y="50" width="12" height="20" rx="5" fill="white" opacity="0.85"/>
+  <rect x="100" y="50" width="12" height="20" rx="5" fill="white" opacity="0.85"/>
+
+  <!-- 左眼 -->
+  <circle cx="46" cy="58" r="10" fill="#4f46e5"/>
+  <circle cx="46" cy="58" r="6" fill="#6366f1"/>
+  <circle cx="49" cy="55" r="3" fill="white" opacity="0.9"/>
+  <circle cx="44" cy="62" r="1.5" fill="white" opacity="0.5"/>
+
+  <!-- 右眼 -->
+  <circle cx="82" cy="58" r="10" fill="#4f46e5"/>
+  <circle cx="82" cy="58" r="6" fill="#6366f1"/>
+  <circle cx="85" cy="55" r="3" fill="white" opacity="0.9"/>
+  <circle cx="80" cy="62" r="1.5" fill="white" opacity="0.5"/>
+
+  <!-- 嘴巴 -->
+  <rect x="42" y="74" width="44" height="7" rx="3.5" fill="#c7d2fe" opacity="0.8"/>
+  <rect x="50" y="74" width="10" height="7" rx="0" fill="#a5b4fc" opacity="0.6"/>
+  <rect x="68" y="74" width="10" height="7" rx="0" fill="#a5b4fc" opacity="0.6"/>
+
+  <!-- 光标箭头（表示控制浏览器） -->
+  <g transform="translate(82, 82)" opacity="0.95">
+    <polygon points="0,0 0,22 6,17 10,26 14,24 10,15 17,15" fill="#fbbf24"/>
+    <polygon points="0,0 0,22 6,17 10,26 14,24 10,15 17,15"
+             fill="none" stroke="#f59e0b" stroke-width="1" stroke-linejoin="round"/>
+  </g>
+</svg>
