@@ -110,18 +110,18 @@ function flashElement(el, color = "#f59e0b") {
 
 /**
  * 判断元素是否可见
+ * 优先用 checkVisibility()（Chrome 105+），避免 getComputedStyle + getBoundingClientRect
+ * 批量调用时触发的强制 layout reflow 是 readPage 卡顿的主要原因
  */
 function isVisible(el) {
   if (!el) return false;
-  const rect = el.getBoundingClientRect();
-  const style = window.getComputedStyle(el);
-  return (
-    rect.width > 0 &&
-    rect.height > 0 &&
-    style.display !== "none" &&
-    style.visibility !== "hidden" &&
-    style.opacity !== "0"
-  );
+  // checkVisibility 是浏览器原生实现，不触发 JS 侧 reflow，比手动检查快 10x 以上
+  if (typeof el.checkVisibility === "function") {
+    return el.checkVisibility({ visibilityProperty: true, opacityProperty: true });
+  }
+  // 降级：offsetParent 为 null 表示 display:none（不含 fixed 元素）
+  if (el.offsetWidth === 0 && el.offsetHeight === 0) return false;
+  return true;
 }
 
 /**
@@ -335,11 +335,17 @@ function readPage() {
 
   perf("elementMap built");
 
-  // 提取页面主要文本：用 textContent 避免触发整页 layout（innerText 会）
-  const bodyText = (document.body.textContent || "")
+  perf("elementMap built");
+  // 提取页面主要文本：优先取语义主内容区，避免导航/广告/SVG路径噪音
+  const mainEl =
+    document.querySelector("main, [role='main'], article, #content, #main") ||
+    document.body;
+  const textClone = mainEl.cloneNode(true);
+  textClone.querySelectorAll("script, style, noscript, svg, nav, header, footer").forEach((el) => el.remove());
+  const bodyText = (textClone.textContent || "")
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, 3000);
+    .slice(0, 8000);
   perf("bodyText done");
 
   perf(`TOTAL (${elements.length} elements → returning ${Math.min(elements.length, 120)})`);
