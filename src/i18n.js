@@ -31,6 +31,14 @@ const TRANSLATIONS = {
     "thinking.label": "AI is analyzing...",
     "stopped": "Stopped.",
     "error.no.tab": "Cannot get current tab",
+    "favorites.title": "Saved Prompts",
+    "favorites.save": "+ Save",
+    "favorites.empty": "No saved prompts yet",
+    "favorites.saved": "Saved ✓",
+    "favorites.duplicate": "Already saved",
+    "copy.success": "Copied ✓",
+    "chat.clear": "Chat cleared",
+    "chat.clear.title": "Clear chat",
   },
 
   "zh-CN": {
@@ -60,6 +68,14 @@ const TRANSLATIONS = {
     "thinking.label": "AI 正在分析...",
     "stopped": "已停止。",
     "error.no.tab": "无法获取当前标签页",
+    "favorites.title": "常用指令",
+    "favorites.save": "+ 保存",
+    "favorites.empty": "暂无保存的指令",
+    "favorites.saved": "已保存 ✓",
+    "favorites.duplicate": "已存在",
+    "copy.success": "已复制 ✓",
+    "chat.clear": "聊天记录已清除",
+    "chat.clear.title": "清除记录",
   },
 
   "zh-TW": {
@@ -89,6 +105,14 @@ const TRANSLATIONS = {
     "thinking.label": "AI 正在分析...",
     "stopped": "已停止。",
     "error.no.tab": "無法取得目前分頁",
+    "favorites.title": "常用指令",
+    "favorites.save": "+ 儲存",
+    "favorites.empty": "尚無儲存的指令",
+    "favorites.saved": "已儲存 ✓",
+    "favorites.duplicate": "已存在",
+    "copy.success": "已複製 ✓",
+    "chat.clear": "對話記錄已清除",
+    "chat.clear.title": "清除記錄",
   },
 
   ja: {
@@ -118,6 +142,14 @@ const TRANSLATIONS = {
     "thinking.label": "AIが分析中...",
     "stopped": "停止しました。",
     "error.no.tab": "現在のタブを取得できません",
+    "favorites.title": "よく使う指示",
+    "favorites.save": "+ 保存",
+    "favorites.empty": "保存された指示はありません",
+    "favorites.saved": "保存しました ✓",
+    "favorites.duplicate": "すでに保存済み",
+    "copy.success": "コピーしました ✓",
+    "chat.clear": "チャット履歴を削除しました",
+    "chat.clear.title": "履歴を削除",
   },
 
   ko: {
@@ -147,6 +179,14 @@ const TRANSLATIONS = {
     "thinking.label": "AI가 분석 중...",
     "stopped": "중지되었습니다.",
     "error.no.tab": "현재 탭을 가져올 수 없습니다",
+    "favorites.title": "자주 쓰는 명령",
+    "favorites.save": "+ 저장",
+    "favorites.empty": "저장된 명령이 없습니다",
+    "favorites.saved": "저장됨 ✓",
+    "favorites.duplicate": "이미 저장됨",
+    "copy.success": "복사됨 ✓",
+    "chat.clear": "대화 기록이 삭제되었습니다",
+    "chat.clear.title": "기록 삭제",
   },
 };
 

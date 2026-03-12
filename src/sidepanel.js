@@ -21,11 +21,18 @@ const baseUrlInput = document.getElementById("baseUrlInput");
 const maxTurnsInput = document.getElementById("maxTurnsInput");
 const inputHint = document.getElementById("inputHint");
 const languageSelect = document.getElementById("languageSelect");
+const favoritesBtn = document.getElementById("favoritesBtn");
+const favoritesPanel = document.getElementById("favoritesPanel");
+const favoritesList = document.getElementById("favoritesList");
+const favoritesSaveBtn = document.getElementById("favoritesSaveBtn");
+const clearBtn = document.getElementById("clearBtn");
 
 // ── 状态 ────────────────────────────────────────────────
 let isRunning = false;
 let currentStepsContainer = null; // 当前 AI 轮次的步骤容器
 let currentThinking = null;       // 思考中动画元素
+let savedPrompts = [];
+let chatHistory = []; // 持久化聊天记录 [{role, text}]
 
 // ── 初始化 ──────────────────────────────────────────────
 
@@ -53,7 +60,41 @@ async function init() {
       messageInput.focus();
     });
   });
+
+  // 加载常用指令
+  await loadFavorites();
+
+  // 恢复聊天记录
+  await loadChatHistory();
 }
+
+// ── 清除聊天记录 ─────────────────────────────────────────
+
+clearBtn.addEventListener("click", async () => {
+  if (isRunning) return;
+  chatHistory = [];
+  await chrome.storage.local.set({ chatHistory: [] });
+  chatContainer.innerHTML = `
+    <div class="welcome">
+      <div class="welcome-icon">🌐</div>
+      <div class="welcome-title" data-i18n="welcome.title"></div>
+      <div class="welcome-desc" data-i18n="welcome.desc"></div>
+      <ul class="welcome-examples">
+        <li data-i18n="welcome.example1"></li>
+        <li data-i18n="welcome.example2"></li>
+      </ul>
+    </div>
+  `;
+  applyTranslations();
+  // 重新绑定示例点击
+  chatContainer.querySelectorAll(".welcome-examples li").forEach((li) => {
+    li.addEventListener("click", () => {
+      messageInput.value = li.textContent.replace(/^→ /, "").trim();
+      messageInput.focus();
+    });
+  });
+  showToast(t("chat.clear"));
+});
 
 // ── 设置面板 ────────────────────────────────────────────
 
@@ -110,6 +151,9 @@ function showNoApiKeyHint() {
 messageInput.addEventListener("input", () => {
   messageInput.style.height = "auto";
   messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + "px";
+  if (favoritesPanel.classList.contains("open")) {
+    updateFavoritesSaveBtn();
+  }
 });
 
 messageInput.addEventListener("keydown", (e) => {
@@ -244,19 +288,35 @@ chrome.runtime.onMessage.addListener((message) => {
 
 // ── UI 组件构建函数 ──────────────────────────────────────
 
-function appendUserMessage(text) {
+function appendUserMessage(text, save = true) {
   const div = document.createElement("div");
   div.className = "message user";
-  div.innerHTML = `<div class="message-bubble">${escapeHtml(text)}</div>`;
+  div.innerHTML = `
+    <div class="message-bubble">${escapeHtml(text)}</div>
+    <button class="copy-btn">⎘ copy</button>
+  `;
+  div.querySelector(".copy-btn").addEventListener("click", () => copyToClipboard(text));
   chatContainer.appendChild(div);
+  if (save) {
+    chatHistory.push({ role: "user", text });
+    saveChatHistory();
+  }
   scrollToBottom();
 }
 
-function appendAssistantMessage(text) {
+function appendAssistantMessage(text, save = true) {
   const div = document.createElement("div");
   div.className = "message assistant";
-  div.innerHTML = `<div class="message-bubble markdown">${renderMarkdown(text)}</div>`;
+  div.innerHTML = `
+    <div class="message-bubble markdown">${renderMarkdown(text)}</div>
+    <button class="copy-btn">⎘ copy</button>
+  `;
+  div.querySelector(".copy-btn").addEventListener("click", () => copyToClipboard(text));
   chatContainer.appendChild(div);
+  if (save) {
+    chatHistory.push({ role: "assistant", text });
+    saveChatHistory();
+  }
 }
 
 /**
@@ -393,7 +453,7 @@ function finalizeSteps() {
   }
 }
 
-function appendError(text) {
+function appendError(text, save = true) {
   const div = document.createElement("div");
   div.className = "message assistant";
   div.innerHTML = `
@@ -403,6 +463,10 @@ function appendError(text) {
     </div>
   `;
   chatContainer.appendChild(div);
+  if (save) {
+    chatHistory.push({ role: "error", text });
+    saveChatHistory();
+  }
 }
 
 function appendWarn(text) {
@@ -483,6 +547,31 @@ function escapeHtml(text) {
     .replace(/'/g, "&#039;");
 }
 
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => showToast(t("copy.success")));
+}
+
+async function saveChatHistory() {
+  // 只保留最近 200 条，防止 storage 过大
+  const trimmed = chatHistory.slice(-200);
+  chatHistory = trimmed;
+  await chrome.storage.local.set({ chatHistory: trimmed });
+}
+
+async function loadChatHistory() {
+  const { chatHistory: stored } = await chrome.storage.local.get("chatHistory");
+  if (!stored || stored.length === 0) return;
+  chatHistory = stored;
+  // 有历史记录时隐藏欢迎界面
+  document.querySelector(".welcome")?.remove();
+  for (const msg of stored) {
+    if (msg.role === "user") appendUserMessage(msg.text, false);
+    else if (msg.role === "assistant") appendAssistantMessage(msg.text, false);
+    else if (msg.role === "error") appendError(msg.text, false);
+  }
+  scrollToBottom();
+}
+
 function showToast(msg) {
   const toast = document.createElement("div");
   toast.style.cssText = `
@@ -495,6 +584,101 @@ function showToast(msg) {
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 2500);
 }
+
+// ── 常用指令 ────────────────────────────────────────────
+
+async function loadFavorites() {
+  const { savedPrompts: stored } = await chrome.storage.local.get("savedPrompts");
+  savedPrompts = stored || [];
+  renderFavorites();
+  updateFavoritesBtnState();
+}
+
+function renderFavorites() {
+  favoritesList.innerHTML = "";
+  if (savedPrompts.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "favorites-empty";
+    empty.textContent = t("favorites.empty");
+    favoritesList.appendChild(empty);
+    return;
+  }
+  savedPrompts.forEach((prompt, idx) => {
+    const item = document.createElement("div");
+    item.className = "favorites-item";
+    item.innerHTML = `
+      <span class="favorites-item-text">${escapeHtml(prompt)}</span>
+      <button class="favorites-item-delete" title="×">×</button>
+    `;
+    item.querySelector(".favorites-item-text").addEventListener("click", () => {
+      messageInput.value = prompt;
+      messageInput.style.height = "auto";
+      messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + "px";
+      messageInput.focus();
+      favoritesPanel.classList.remove("open");
+    });
+    item.querySelector(".favorites-item-delete").addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteFavorite(idx);
+    });
+    favoritesList.appendChild(item);
+  });
+}
+
+function updateFavoritesBtnState() {
+  if (savedPrompts.length > 0) {
+    favoritesBtn.classList.add("has-favorites");
+    favoritesBtn.textContent = "★";
+  } else {
+    favoritesBtn.classList.remove("has-favorites");
+    favoritesBtn.textContent = "☆";
+  }
+}
+
+function updateFavoritesSaveBtn() {
+  const hasText = messageInput.value.trim().length > 0;
+  favoritesSaveBtn.style.visibility = hasText ? "visible" : "hidden";
+}
+
+async function saveFavorite() {
+  const text = messageInput.value.trim();
+  if (!text) return;
+  if (savedPrompts.includes(text)) {
+    showToast(t("favorites.duplicate"));
+    return;
+  }
+  savedPrompts.unshift(text);
+  await chrome.storage.local.set({ savedPrompts });
+  renderFavorites();
+  updateFavoritesBtnState();
+  showToast(t("favorites.saved"));
+}
+
+async function deleteFavorite(idx) {
+  savedPrompts.splice(idx, 1);
+  await chrome.storage.local.set({ savedPrompts });
+  renderFavorites();
+  updateFavoritesBtnState();
+  if (savedPrompts.length === 0) {
+    favoritesPanel.classList.remove("open");
+  }
+}
+
+favoritesBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  favoritesPanel.classList.toggle("open");
+  if (favoritesPanel.classList.contains("open")) {
+    updateFavoritesSaveBtn();
+  }
+});
+
+favoritesSaveBtn.addEventListener("click", saveFavorite);
+
+document.addEventListener("click", (e) => {
+  if (!favoritesPanel.contains(e.target) && e.target !== favoritesBtn) {
+    favoritesPanel.classList.remove("open");
+  }
+});
 
 // ── 启动 ──────────────────────────────────────────────
 init();

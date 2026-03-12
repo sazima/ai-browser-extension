@@ -13,7 +13,10 @@
       <span class="logo">🤖</span>
       <span data-i18n="app.title">AI 浏览器助手</span>
     </div>
-    <button class="settings-btn" id="settingsBtn" title="Settings">⚙️</button>
+    <div class="header-actions">
+      <button class="settings-btn" id="clearBtn" data-i18n-title="chat.clear.title" title="清除记录">🗑</button>
+      <button class="settings-btn" id="settingsBtn" title="Settings">⚙️</button>
+    </div>
   </header>
 
   <!-- 设置面板（默认隐藏） -->
@@ -66,6 +69,14 @@
 
   <!-- 底部输入区域 -->
   <footer class="input-area">
+    <!-- 常用指令面板 -->
+    <div class="favorites-panel" id="favoritesPanel">
+      <div class="favorites-header">
+        <span data-i18n="favorites.title">常用指令</span>
+        <button class="favorites-save-btn" id="favoritesSaveBtn" data-i18n="favorites.save">+ 保存</button>
+      </div>
+      <div class="favorites-list" id="favoritesList"></div>
+    </div>
     <div class="input-row">
       <textarea
         id="messageInput"
@@ -74,6 +85,7 @@
         data-i18n-placeholder="input.placeholder"
         rows="1"
       ></textarea>
+      <button class="favorites-btn" id="favoritesBtn" title="常用指令">☆</button>
       <button class="send-btn" id="sendBtn" title="Send">
         <span id="sendIcon">➤</span>
       </button>

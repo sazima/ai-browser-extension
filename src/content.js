@@ -130,7 +130,7 @@ function isVisible(el) {
 function getElementText(el) {
   return (
     el.innerText?.trim() ||
-    el.value?.trim() ||
+    (typeof el.value === "string" ? el.value.trim() : "") ||
     el.placeholder?.trim() ||
     el.getAttribute("aria-label")?.trim() ||
     el.getAttribute("title")?.trim() ||
@@ -276,17 +276,125 @@ function readPage() {
   const navElements = [];
   const otherElements = [];
 
-  // 原始元素超过 600 时提前截断，避免在 YouTube 等重页面上遍历数千元素卡死
-  const RAW_CAP = 600;
+  // ── 优先扫描富文本编辑器（TinyMCE iframe + ProseMirror/Quill contenteditable）──
+  // 这类编辑器在复杂表单页面中往往排在 120 个名额之后被截断，提前加入 otherElements 保证可见
+  function getRichEditorLabel(el) {
+    const parent = el.closest('[class*="field"], [class*="editor"], [class*="form"], .control, .field-group, td, li, .description');
+    if (!parent) return "";
+    const lbl = parent.querySelector('label, .label, legend, th');
+    return lbl?.innerText?.trim() || "";
+  }
+
+  // 1. TinyMCE iframe
+  try {
+    const iframeSelectors = [
+      'iframe[id$="_ifr"]', 'iframe.mce-content-iframe',
+      'iframe[title*="Rich"]', 'iframe[title*="Editor"]', 'iframe[title*="editor"]',
+    ].join(",");
+    for (const iframe of document.querySelectorAll(iframeSelectors)) {
+      try {
+        const iframeBody = iframe.contentDocument?.body;
+        if (!iframeBody || !iframeBody.isContentEditable) continue;
+        const lbl = getRichEditorLabel(iframe);
+        otherElements.push({ el: iframe, info: {
+          tag: "iframe", type: "richeditor",
+          text: lbl || "(rich text editor)", href: "",
+          ...(lbl ? { label: lbl } : {}),
+        }});
+      } catch { /* 跨域 iframe 跳过 */ }
+    }
+  } catch { /* 忽略 */ }
+
+  // 2. ProseMirror / Quill / Atlassian Editor（contenteditable div）
+  // 普通 [contenteditable="true"] 已在主选择器里，但会被 600 cap 或 120 返回 cap 截断
+  // 这里单独扫描「外层编辑区容器」并优先加入列表
+  try {
+    const ceSelectors = [
+      '.ProseMirror[contenteditable]',
+      '.ql-editor[contenteditable]',
+      '.ak-editor-content-area[contenteditable]',
+      '[data-editor][contenteditable]',
+      '[class*="editor"][contenteditable="true"]',
+      '[class*="Editor"][contenteditable="true"]',
+      '[role="textbox"][aria-multiline="true"]',
+    ].join(",");
+    for (const el of document.querySelectorAll(ceSelectors)) {
+      if (!el.isContentEditable) continue;
+      if (!isVisible(el)) continue;
+      const lbl = getRichEditorLabel(el);
+      otherElements.push({ el, info: {
+        tag: el.tagName.toLowerCase(), type: "richeditor",
+        text: lbl || el.innerText?.trim().slice(0, 40) || "(rich text editor)",
+        href: "",
+        ...(lbl ? { label: lbl } : {}),
+      }});
+    }
+  } catch { /* 忽略 */ }
+
+  perf(`richEditor pre-scan: ${otherElements.length}`);
+
+  // 通用模态框检测：方案一（z-index最大值）+ 方案二（body overflow:hidden）
+  // 不依赖任何框架 class 名，适配 JIRA、Ant Design、Element UI、自定义弹窗等
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  function detectActiveModal() {
+    // 方案二：body overflow:hidden 是"有模态框打开"的强信号
+    const bodyOverflow = window.getComputedStyle(document.body).overflow;
+    const htmlOverflow = window.getComputedStyle(document.documentElement).overflow;
+    const hasModalSignal = bodyOverflow === "hidden" || htmlOverflow === "hidden";
+
+    // 方案一：找 z-index 最高的、足够大的、包含交互元素的定位元素
+    let best = null;
+    let bestZ = 0;
+    // 只扫描可能是弹窗容器的元素，避免遍历整个 DOM
+    const candidates = document.querySelectorAll(
+      'body > *, body > * > *, [style*="z-index"], [class*="modal"], [class*="dialog"], [class*="popup"], [class*="overlay"], [class*="layer"], [role="dialog"]'
+    );
+    for (const el of candidates) {
+      const style = window.getComputedStyle(el);
+      if (style.position !== "fixed" && style.position !== "absolute") continue;
+      if (style.display === "none" || style.visibility === "hidden") continue;
+      const z = parseInt(style.zIndex) || 0;
+      if (z <= bestZ) continue;
+      const r = el.getBoundingClientRect();
+      // 足够大（宽高各超过视口的 25%）才认为是弹窗
+      if (r.width < vw * 0.25 || r.height < vh * 0.25) continue;
+      // 必须包含至少一个交互元素
+      if (!el.querySelector("input, button, textarea, select, a[href]")) continue;
+      best = el;
+      bestZ = z;
+    }
+
+    // 只有满足以下任一条件才返回模态框：
+    // 1. body 有 overflow:hidden 且找到了候选元素
+    // 2. 候选元素 z-index 极高（>= 1000），即便没有 overflow:hidden 信号
+    if (best && (hasModalSignal || bestZ >= 1000)) return best;
+    return null;
+  }
+
+  let activeModal = null;
+  try { activeModal = detectActiveModal(); } catch { /* 忽略 */ }
+
+  function isInViewport(el) {
+    // 模态框内的元素：不做视口过滤，全部纳入
+    if (activeModal && activeModal.contains(el)) return true;
+    const r = el.getBoundingClientRect();
+    return r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw;
+  }
+
   const rawList = Array.from(document.querySelectorAll(selectors));
-  perf(`querySelectorAll done (${rawList.length} raw elements)`);
-  const capped = rawList.length > RAW_CAP ? rawList.slice(0, RAW_CAP) : rawList;
+  perf(`querySelectorAll done (${rawList.length} raw elements, modal=${!!activeModal})`);
 
   // 只对表单控件调用 getFieldLabel（含 cloneNode，开销大）
   const FORM_TAGS = new Set(["input", "textarea", "select"]);
+  // 预扫描已加入的元素集合，避免重复
+  const preScannedSet = new Set(otherElements.map((e) => e.el));
 
-  for (const el of capped) {
+  for (const el of rawList) {
+    if (preScannedSet.has(el)) continue; // 富文本编辑器已优先加入，跳过
     if (!isVisible(el)) continue;
+    if (!isInViewport(el)) continue;    // 视口过滤（模态框内元素豁免）
 
     const text = getElementText(el);
     const tag = el.tagName.toLowerCase();
@@ -316,10 +424,65 @@ function readPage() {
 
   perf(`element loop done (nav=${navElements.length} other=${otherElements.length})`);
 
-  // 先放导航区元素，再放其他元素，确保导航菜单不会被截断
+  // ── 补充扫描：分两步捕获主选择器漏掉的可点击元素 ──────────────
+  const capturedSet = new Set(rawList);
+  const suppElements = [];
+
+  // 第一步：优先扫描浮动容器（下拉菜单、弹窗等动态追加到 body 末尾的层）
+  // Element UI / Ant Design 等框架的 dropdown 都是 position:fixed/absolute 高层级浮层
+  const floatContainers = document.querySelectorAll(
+    '[class*="dropdown"], [class*="popper"], [class*="picker__panel"], ' +
+    '[class*="select-dropdown"], [role="listbox"], [role="menu"], [role="tooltip"]'
+  );
+  for (const container of floatContainers) {
+    if (!isVisible(container)) continue;
+    const cStyle = window.getComputedStyle(container);
+    if (cStyle.position !== "fixed" && cStyle.position !== "absolute") continue;
+    for (const el of container.querySelectorAll("li, [class*='item'], [class*='option']")) {
+      if (capturedSet.has(el)) continue;
+      if (!isVisible(el)) continue;
+      if (!isInViewport(el)) continue;
+      const text = el.innerText?.trim() || "";
+      if (!text || text.length > 100) continue;
+      suppElements.push({ el, info: {
+        tag: el.tagName.toLowerCase(), type: "", text: text.slice(0, 120), href: "",
+      }});
+      if (suppElements.length >= 80) break;
+    }
+    if (suppElements.length >= 80) break;
+  }
+
+  // 第二步：常规 cursor:pointer 扫描（处理 Vue/React JS 绑定事件的普通可点击元素）
+  const capturedSetFull = new Set([...rawList, ...suppElements.map((e) => e.el)]);
+  const suppNodeList = document.querySelectorAll("span, div, li, td, p");
+  let suppChecked = 0;
+  for (const el of suppNodeList) {
+    if (suppChecked >= 400) break;
+    if (capturedSetFull.has(el)) continue;
+    if (!isVisible(el)) continue;
+    if (!isInViewport(el)) continue;
+    const text = el.innerText?.trim() || "";
+    const firstLine = text.split("\n")[0].trim();
+    if (firstLine.length > 80) continue;
+    suppChecked++;
+    if (window.getComputedStyle(el).cursor === "pointer") {
+      const displayText = firstLine
+        || el.getAttribute("data-placeholder")?.trim()
+        || el.getAttribute("placeholder")?.trim()
+        || el.getAttribute("aria-label")?.trim()
+        || `(${el.tagName.toLowerCase()})`;
+      suppElements.push({ el, info: {
+        tag: el.tagName.toLowerCase(), type: "", text: displayText.slice(0, 120), href: "",
+      }});
+      if (suppElements.length >= 100) break;
+    }
+  }
+  perf(`supp scan done (float=${floatContainers.length} checked=${suppChecked} found=${suppElements.length})`);
+
+  // 先放导航区元素，再放其他元素，最后放补充元素
   const allEntries = []; // { el, id, info }
   const elements = [];
-  for (const { el, info } of [...navElements, ...otherElements]) {
+  for (const { el, info } of [...navElements, ...otherElements, ...suppElements]) {
     info.id = counter;
     elementMap.set(counter, el);
     el.setAttribute("data-ai-id", counter);
@@ -330,7 +493,7 @@ function readPage() {
 
   // 渲染覆盖层（异步，不阻塞 readPage 返回）
   setTimeout(() => {
-    try { renderOverlay(allEntries.slice(0, 120)); } catch { /* 忽略渲染错误 */ }
+    try { renderOverlay(allEntries); } catch { /* 忽略渲染错误 */ }
   }, 0);
 
   perf("elementMap built");
@@ -348,13 +511,14 @@ function readPage() {
     .slice(0, 8000);
   perf("bodyText done");
 
-  perf(`TOTAL (${elements.length} elements → returning ${Math.min(elements.length, 120)})`);
+  perf(`TOTAL elements=${elements.length} modal=${!!activeModal}`);
   return {
     url: window.location.href,
     title: document.title,
     body_text: bodyText,
-    interactive_elements: elements.slice(0, 120),
+    interactive_elements: elements,
     total_elements: elements.length,
+    active_modal: activeModal ? true : false,
   };
 }
 
@@ -368,6 +532,12 @@ function clickElement(id) {
   try {
     el.scrollIntoView({ behavior: "smooth", block: "center" });
     el.focus();
+
+    // 先派发鼠标悬浮事件，处理 hover 触发展开的下拉菜单（如 Element UI el-submenu）
+    // mouseover 会冒泡（父元素也能收到），mouseenter 不冒泡但某些组件只监听它
+    el.dispatchEvent(new MouseEvent("mouseover",  { bubbles: true,  cancelable: true, composed: true }));
+    el.dispatchEvent(new MouseEvent("mouseenter", { bubbles: false, cancelable: true, composed: true }));
+
     el.click();
 
     // 橙色闪烁：区别于 read_page 时的蓝色标注，让用户清楚看到点了哪里
@@ -391,6 +561,28 @@ function typeText(id, text, clearFirst = true) {
     el.focus();
 
     const isContentEditable = el.isContentEditable;
+    const isRichEditorIframe = el.tagName.toLowerCase() === "iframe";
+
+    if (isRichEditorIframe) {
+      // TinyMCE / 其他富文本编辑器 iframe
+      // 直接操作 iframe 的 contentDocument.body（contenteditable 区域）
+      const iframeBody = el.contentDocument?.body;
+      if (!iframeBody) return { success: false, error: "无法访问 iframe 内容，可能是跨域限制" };
+      iframeBody.focus();
+      if (clearFirst) {
+        iframeBody.ownerDocument.execCommand("selectAll", false, null);
+        iframeBody.ownerDocument.execCommand("delete", false, null);
+      }
+      for (const char of text) {
+        iframeBody.dispatchEvent(new KeyboardEvent("keydown",  { key: char, bubbles: true }));
+        iframeBody.dispatchEvent(new KeyboardEvent("keypress", { key: char, bubbles: true }));
+        iframeBody.ownerDocument.execCommand("insertText", false, char);
+        iframeBody.dispatchEvent(new KeyboardEvent("keyup",    { key: char, bubbles: true }));
+      }
+      iframeBody.dispatchEvent(new Event("input", { bubbles: true }));
+      flashElement(el, "#10b981");
+      return { success: true, message: `在富文本编辑器(iframe)中输入了: "${text}"` };
+    }
 
     if (clearFirst) {
       if (isContentEditable) {
@@ -500,6 +692,18 @@ function fillForm(fields) {
           el.dispatchEvent(new Event("change", { bubbles: true }));
           el.dispatchEvent(new Event("input", { bubbles: true }));
         }
+      } else if (tag === "iframe") {
+        // TinyMCE 等富文本编辑器 iframe
+        const iframeBody = el.contentDocument?.body;
+        if (iframeBody) {
+          iframeBody.focus();
+          iframeBody.ownerDocument.execCommand("selectAll", false, null);
+          iframeBody.ownerDocument.execCommand("delete", false, null);
+          for (const char of String(value)) {
+            iframeBody.ownerDocument.execCommand("insertText", false, char);
+          }
+          iframeBody.dispatchEvent(new Event("input", { bubbles: true }));
+        }
       } else if (el.isContentEditable) {
         // contenteditable（富文本框）：逐字符模拟输入
         document.execCommand("selectAll", false, null);
@@ -533,6 +737,27 @@ function fillForm(fields) {
     results,
     message: `批量填写完成：${successCount}/${fields.length} 个字段`,
   };
+}
+
+/**
+ * 悬浮在元素上（只触发 hover 事件，不点击）
+ * 用于展开 hover 触发的下拉菜单，再 read_page 查看子项后点击目标
+ */
+function hoverElement(id) {
+  const el = elementMap.get(id);
+  if (!el) return { success: false, error: `元素 #${id} 不存在，请先调用 read_page` };
+
+  try {
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.dispatchEvent(new MouseEvent("mouseover",  { bubbles: true,  cancelable: true, composed: true }));
+    el.dispatchEvent(new MouseEvent("mouseenter", { bubbles: false, cancelable: true, composed: true }));
+    el.dispatchEvent(new MouseEvent("mousemove",  { bubbles: true,  cancelable: true, composed: true }));
+
+    flashElement(el, "#818cf8"); // 紫色闪烁，区别于点击的橙色
+    return { success: true, message: `悬浮在: ${getElementText(el) || el.tagName}` };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 }
 
 /**
@@ -586,6 +811,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       break;
     case "fill_form":
       result = fillForm(params.fields || []);
+      break;
+    case "hover_element":
+      result = hoverElement(params.id);
       break;
     case "find_by_text":
       result = findByText(params.text);

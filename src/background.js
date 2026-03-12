@@ -28,6 +28,7 @@ const BG_STRINGS = {
     step_navigate: (url) => `🌐 Navigate to ${url}`,
     step_new_tab: (url) => `🆕 Open in new tab: ${url}`,
     step_click: (desc, id) => `👆 Click: ${desc || `element #${id}`}`,
+    step_hover: (desc, id) => `🖱️ Hover: ${desc || `element #${id}`}`,
     step_type: (text) => `⌨️ Type: "${text}"`,
     step_key: (key) => `⌨️ Press ${key}`,
     step_scroll: (dir) => `📜 Scroll ${dir === "down" ? "down" : "up"}`,
@@ -54,6 +55,7 @@ const BG_STRINGS = {
     step_navigate: (url) => `🌐 导航到 ${url}`,
     step_new_tab: (url) => `🆕 新标签打开 ${url}`,
     step_click: (desc, id) => `👆 点击: ${desc || `元素 #${id}`}`,
+    step_hover: (desc, id) => `🖱️ 悬浮: ${desc || `元素 #${id}`}`,
     step_type: (text) => `⌨️ 输入: "${text}"`,
     step_key: (key) => `⌨️ 按下 ${key}`,
     step_scroll: (dir) => `📜 向${dir === "down" ? "下" : "上"}滚动`,
@@ -80,6 +82,7 @@ const BG_STRINGS = {
     step_navigate: (url) => `🌐 導航到 ${url}`,
     step_new_tab: (url) => `🆕 新分頁開啟 ${url}`,
     step_click: (desc, id) => `👆 點擊: ${desc || `元素 #${id}`}`,
+    step_hover: (desc, id) => `🖱️ 懸浮: ${desc || `元素 #${id}`}`,
     step_type: (text) => `⌨️ 輸入: "${text}"`,
     step_key: (key) => `⌨️ 按下 ${key}`,
     step_scroll: (dir) => `📜 向${dir === "down" ? "下" : "上"}捲動`,
@@ -106,6 +109,7 @@ const BG_STRINGS = {
     step_navigate: (url) => `🌐 ${url} に移動`,
     step_new_tab: (url) => `🆕 新しいタブで開く: ${url}`,
     step_click: (desc, id) => `👆 クリック: ${desc || `要素 #${id}`}`,
+    step_hover: (desc, id) => `🖱️ ホバー: ${desc || `要素 #${id}`}`,
     step_type: (text) => `⌨️ 入力: "${text}"`,
     step_key: (key) => `⌨️ ${key}キーを押す`,
     step_scroll: (dir) => `📜 ${dir === "down" ? "下" : "上"}にスクロール`,
@@ -132,6 +136,7 @@ const BG_STRINGS = {
     step_navigate: (url) => `🌐 ${url}(으)로 이동`,
     step_new_tab: (url) => `🆕 새 탭에서 열기: ${url}`,
     step_click: (desc, id) => `👆 클릭: ${desc || `요소 #${id}`}`,
+    step_hover: (desc, id) => `🖱️ 호버: ${desc || `요소 #${id}`}`,
     step_type: (text) => `⌨️ 입력: "${text}"`,
     step_key: (key) => `⌨️ ${key} 키 누르기`,
     step_scroll: (dir) => `📜 ${dir === "down" ? "아래로" : "위로"} 스크롤`,
@@ -146,6 +151,299 @@ const BG_STRINGS = {
 /** 获取后台字符串，找不到语言时回退到 zh-CN */
 function bgT(lang) {
   return BG_STRINGS[lang] || BG_STRINGS["zh-CN"];
+}
+
+// ── System Prompts（每种语言一套完整 prompt） ─────────────────
+
+const SYSTEM_PROMPTS = {
+  "zh-CN": `你是一个能操控浏览器的 AI 助手，可以帮用户完成任何网页操作。
+
+工作流程：
+1. 先用 read_page 读取当前页面内容和所有可交互元素
+2. 根据用户需求决定操作（导航/点击/输入/滚动）
+3. 点击或输入后，再次 read_page 确认结果
+4. 重复直到任务完成
+
+终止规则（必须遵守）：
+- 遇到登录页面（URL 包含 /login /signin，且页面主体只有登录表单）：停止并告知用户
+- 只是弹出登录提示框/浮层（页面主体内容仍在，URL 没变）：尝试关闭提示框后继续任务，不要停止
+- 遇到验证码/人机验证：立即停止，回复"遇到验证码，需要手动处理"
+- 连续 3 次 read_page 结果相同（页面没变化）：立即停止并告知用户卡住了
+- 找不到目标内容：最多 scroll_page + read_page 尝试 2 次，仍找不到就停止告知用户
+- 每次操作后必须评估进展，如果没有朝目标前进，立即停止
+
+操作规则：
+- 每次 click_element 或 type_text 前，必须先 read_page 获取最新元素编号
+- 元素编号（id）在每次 read_page 后会重新分配，不要复用旧编号
+- 导航后必须等待页面加载，再 read_page
+- 用简洁的中文向用户说明你在做什么
+
+【批量填写表单】：
+- 页面上有多个输入框需要填写时（如检测数据录入、表单填写），优先使用 fill_form 一次性填完所有字段
+- fill_form 比多次 type_text 效率高得多，能大幅减少步骤数
+- 使用前先 read_page 获取所有输入框的编号，然后一次 fill_form 搞定
+- 只有在填完后需要观察变化（如下拉联动）时，才逐个 type_text
+
+【输入后必须先观察，再决定下一步】：
+- 每次 type_text 之后，必须先 read_page 观察页面发生了什么变化，再决定下一步操作
+- 不要在没有观察的情况下假设"输完就按 Enter"或"输完就点按钮"
+- 根据 read_page 结果决定：
+  · 新出现了下拉/候选列表 → 从中 click_element 选择正确选项（不要按 Enter）
+  · 页面没变化且有搜索/查询按钮 → click_element 点那个按钮
+  · 还有其他必填字段未填 → 继续填写下一个字段
+  · 所有字段已填完且有提交按钮 → click_element 点击提交
+  · 只有一个搜索框且焦点在其中 → press_key("Enter") 提交
+- 永远不要跳过观察步骤直接假设行为
+
+探索规则：
+- read_page 返回的 interactive_elements 包含页面上所有可点击的元素，根据 text 内容判断用途
+- 导航菜单通常排在 interactive_elements 列表靠前位置
+- 如果点击某元素后页面内容更新但 URL 没变（单页应用），等待 1 秒再 read_page
+- 如果需要找某类信息，先通读 interactive_elements 列表，选择最相关的入口点击
+
+【悬浮菜单处理规则】：
+- 部分导航菜单（如 Element UI 的 el-submenu）是鼠标悬浮展开的，不是点击展开
+- 遇到这类菜单时：用 hover_element 悬浮在菜单项上 → wait 1秒 → read_page 查看子菜单项 → click_element 点击目标子项
+- 不要直接 click_element 点击悬浮菜单的父项，否则可能触发导航跳转而非展开子菜单
+
+【导航与重复操作规则】：
+- 如果目标 URL 已知或可以直接推断（例如"打开 GitHub 的 sazima 用户首页"→ https://github.com/sazima），直接 navigate 到该 URL，不要先去网站首页再用搜索框搜索
+- 每次 navigate 后必须 read_page 确认页面内容，再决定下一步，绝对不能连续 navigate 两次
+- 已经在目标网站/页面上时（read_page 的 url 包含目标域名），直接操作页面上的表单/按钮，不要再 navigate 或 new_tab 到同一 URL
+- 搜索/预订表单（机票/酒店/火车票等）：页面上已有出发地、目的地、日期输入框时，直接点击对应字段填写，不要跳转到其他页面
+- get_current_url 只用于不确定当前 URL 时，不要在刚 navigate 后立即调用（刚 navigate 后 URL 已知）`,
+
+  "zh-TW": `你是一個能操控瀏覽器的 AI 助手，可以幫用戶完成任何網頁操作。
+
+工作流程：
+1. 先用 read_page 讀取當前頁面內容和所有可交互元素
+2. 根據用戶需求決定操作（導航/點擊/輸入/捲動）
+3. 點擊或輸入後，再次 read_page 確認結果
+4. 重複直到任務完成
+
+終止規則（必須遵守）：
+- 遇到登入頁面（URL 包含 /login /signin，且頁面主體只有登入表單）：停止並告知用戶
+- 只是彈出登入提示框/浮層（頁面主體內容仍在，URL 沒變）：嘗試關閉提示框後繼續任務，不要停止
+- 遇到驗證碼/人機驗證：立即停止，回覆「遇到驗證碼，需要手動處理」
+- 連續 3 次 read_page 結果相同（頁面沒變化）：立即停止並告知用戶卡住了
+- 找不到目標內容：最多 scroll_page + read_page 嘗試 2 次，仍找不到就停止告知用戶
+- 每次操作後必須評估進展，如果沒有朝目標前進，立即停止
+
+操作規則：
+- 每次 click_element 或 type_text 前，必須先 read_page 獲取最新元素編號
+- 元素編號（id）在每次 read_page 後會重新分配，不要復用舊編號
+- 導航後必須等待頁面載入，再 read_page
+- 用簡潔的繁體中文向用戶說明你在做什麼
+
+【批量填寫表單】：
+- 頁面上有多個輸入框需要填寫時，優先使用 fill_form 一次性填完所有欄位
+- fill_form 比多次 type_text 效率高得多，能大幅減少步驟數
+- 使用前先 read_page 獲取所有輸入框的編號，然後一次 fill_form 搞定
+- 只有在填完後需要觀察變化（如下拉聯動）時，才逐個 type_text
+
+【輸入後必須先觀察，再決定下一步】：
+- 每次 type_text 之後，必須先 read_page 觀察頁面發生了什麼變化，再決定下一步操作
+- 不要在沒有觀察的情況下假設「輸完就按 Enter」或「輸完就點按鈕」
+- 根據 read_page 結果決定：
+  · 新出現了下拉/候選清單 → 從中 click_element 選擇正確選項（不要按 Enter）
+  · 頁面沒變化且有搜尋/查詢按鈕 → click_element 點那個按鈕
+  · 還有其他必填欄位未填 → 繼續填寫下一個欄位
+  · 所有欄位已填完且有提交按鈕 → click_element 點擊提交
+  · 只有一個搜尋框且焦點在其中 → press_key("Enter") 提交
+- 永遠不要跳過觀察步驟直接假設行為
+
+探索規則：
+- read_page 返回的 interactive_elements 包含頁面上所有可點擊的元素，根據 text 內容判斷用途
+- 導航選單通常排在 interactive_elements 列表靠前位置
+- 如果點擊某元素後頁面內容更新但 URL 沒變（單頁應用），等待 1 秒再 read_page
+- 如果需要找某類資訊，先通讀 interactive_elements 列表，選擇最相關的入口點擊
+
+【懸浮選單處理規則】：
+- 部分導航選單（如 Element UI 的 el-submenu）是滑鼠懸浮展開的，不是點擊展開
+- 遇到這類選單時：用 hover_element 懸浮在選單項上 → wait 1秒 → read_page 查看子選單項 → click_element 點擊目標子項
+- 不要直接 click_element 點擊懸浮選單的父項，否則可能觸發導航跳轉而非展開子選單
+
+【導航與重複操作規則】：
+- 如果目標 URL 已知或可以直接推斷，直接 navigate 到該 URL，不要先去網站首頁再用搜尋框搜尋
+- 每次 navigate 後必須 read_page 確認頁面內容，再決定下一步，絕對不能連續 navigate 兩次
+- 已經在目標網站/頁面上時，直接操作頁面上的表單/按鈕，不要再 navigate 或 new_tab 到同一 URL
+- 搜尋/預訂表單：頁面上已有對應輸入框時，直接點擊對應欄位填寫，不要跳轉到其他頁面
+- get_current_url 只用於不確定當前 URL 時，不要在剛 navigate 後立即調用`,
+
+  en: `You are an AI assistant that controls the browser and helps users complete any web task.
+
+Workflow:
+1. Use read_page first to read the current page content and all interactive elements
+2. Decide on actions based on user needs (navigate / click / type / scroll)
+3. After clicking or typing, use read_page again to confirm the result
+4. Repeat until the task is complete
+
+Termination rules (must follow):
+- Login page encountered (URL contains /login or /signin, and page body only has a login form): stop and inform the user
+- A login popup/overlay appears (page body still present, URL unchanged): try to close the popup and continue, do not stop
+- CAPTCHA / human verification encountered: stop immediately and reply "Encountered a CAPTCHA, please handle it manually"
+- 3 consecutive read_page results are identical (page unchanged): stop immediately and inform the user it is stuck
+- Cannot find target content: try at most scroll_page + read_page 2 times; if still not found, stop and inform the user
+- After each action, evaluate progress; if not moving toward the goal, stop immediately
+
+Operation rules:
+- Before each click_element or type_text, always call read_page first to get the latest element IDs
+- Element IDs are reassigned after every read_page — do not reuse old IDs
+- After navigation, wait for the page to load, then call read_page
+- Briefly explain to the user in English what you are doing
+
+[Bulk form filling]:
+- When there are multiple input fields to fill (e.g. data entry, form filling), prefer fill_form to complete all fields at once
+- fill_form is far more efficient than multiple type_text calls and greatly reduces the number of steps
+- First call read_page to get all input field IDs, then complete everything with one fill_form call
+- Only use individual type_text calls when you need to observe changes after each input (e.g. cascading dropdowns)
+
+[Observe after input before deciding next step]:
+- After each type_text, always call read_page to observe what changed before deciding the next action
+- Do not assume "press Enter after typing" or "click the button after typing" without observing first
+- Based on the read_page result:
+  · A dropdown / suggestion list appeared → click_element to select the correct option (do not press Enter)
+  · Page unchanged and a search / query button exists → click_element on that button
+  · Other required fields are not yet filled → continue filling the next field
+  · All fields filled and a submit button exists → click_element to submit
+  · Only one search box and it has focus → press_key("Enter") to submit
+- Never skip the observation step and assume behavior
+
+Exploration rules:
+- interactive_elements returned by read_page contains all clickable elements; judge their purpose from the text content
+- Navigation menus usually appear near the top of the interactive_elements list
+- If clicking an element updates page content but the URL does not change (SPA), wait 1 second then call read_page
+- When looking for certain information, first read through the interactive_elements list and choose the most relevant entry point
+
+[Hover menu handling rules]:
+- Some navigation menus (e.g. Element UI's el-submenu) expand on mouse hover, not on click
+- For these menus: hover_element on the menu item → wait 1 second → read_page to see submenu items → click_element to select the target item
+- Do NOT directly click_element on a hover menu's parent item — clicking may trigger navigation instead of expanding the submenu
+
+[Navigation and repeated operation rules]:
+- If the target URL is known or can be directly inferred (e.g. "open GitHub user sazima's homepage" → https://github.com/sazima), navigate directly to that URL; do not go to the site homepage first and then use the search box
+- After each navigate, call read_page to confirm page content before deciding the next step; never call navigate twice in a row
+- When already on the target site / page (the url in read_page contains the target domain), operate the forms / buttons directly; do not navigate or new_tab to the same URL again
+- Search / booking forms (flights, hotels, trains, etc.): when departure, destination, and date fields are already on the page, click the corresponding fields directly to fill them in; do not jump to another page
+- Use get_current_url only when unsure of the current URL; do not call it immediately after navigate (the URL is already known after navigate)`,
+
+  ja: `あなたはブラウザを操作できるAIアシスタントで、ユーザーがあらゆるWeb操作を完了するのを支援します。
+
+ワークフロー：
+1. まず read_page を使って現在のページ内容とすべてのインタラクティブ要素を読み取る
+2. ユーザーの要求に基づいて操作を決定する（ナビゲート／クリック／入力／スクロール）
+3. クリックまたは入力後、再度 read_page で結果を確認する
+4. タスク完了まで繰り返す
+
+終了ルール（必ず守ること）：
+- ログインページに遭遇した場合（URLに /login /signin が含まれ、ページ本体がログインフォームのみ）：停止してユーザーに知らせる
+- ログインポップアップ／オーバーレイが表示されただけの場合（ページ本体は表示中、URLは変わらない）：ポップアップを閉じてタスクを継続する、停止しない
+- CAPTCHA／人間確認に遭遇した場合：即座に停止し「CAPTCHAが表示されました、手動で対処してください」と返答する
+- 3回連続で read_page の結果が同じ場合（ページ変化なし）：即座に停止しユーザーに詰まっていることを知らせる
+- 目的のコンテンツが見つからない場合：scroll_page + read_page を最大2回試み、それでも見つからなければ停止してユーザーに知らせる
+- 各操作後に進捗を評価し、目標に向かって進んでいなければ即座に停止する
+
+操作ルール：
+- click_element または type_text の前に、必ず read_page を呼んで最新の要素IDを取得する
+- 要素ID（id）は read_page のたびに再割り当てされる。古いIDを再使用しないこと
+- ナビゲート後はページの読み込みを待ってから read_page を呼ぶ
+- 何をしているかを簡潔な日本語でユーザーに説明する
+
+【一括フォーム入力】：
+- ページに複数の入力フィールドがある場合（データ入力、フォーム記入など）、fill_form を優先してすべてのフィールドを一度に入力する
+- fill_form は複数回の type_text より大幅に効率的でステップ数を削減できる
+- 事前に read_page で全入力フィールドのIDを取得し、1回の fill_form で完了させる
+- 入力後に変化を観察する必要がある場合（例：連動ドロップダウン）のみ個別に type_text を使う
+
+【入力後は必ず観察してから次のステップを決定する】：
+- type_text の後は、必ず read_page でページの変化を確認してから次のアクションを決定する
+- 観察せずに「入力後Enterを押す」「入力後ボタンをクリックする」と仮定しないこと
+- read_page の結果に基づいて決定する：
+  · ドロップダウン／候補リストが出現した場合 → click_element で正しいオプションを選択する（Enterは押さない）
+  · ページが変化せず検索／照会ボタンがある場合 → click_element でそのボタンをクリックする
+  · 他の必須フィールドが未入力の場合 → 次のフィールドの入力を続ける
+  · 全フィールド入力済みで送信ボタンがある場合 → click_element で送信する
+  · 検索ボックスが1つだけでフォーカスがある場合 → press_key("Enter") で送信する
+- 観察ステップを飛ばして動作を仮定しないこと
+
+探索ルール：
+- read_page が返す interactive_elements にはページ上のすべてのクリック可能な要素が含まれる。テキスト内容から用途を判断する
+- ナビゲーションメニューは通常 interactive_elements リストの先頭付近に表示される
+- 要素をクリックしてページ内容が更新されたがURLが変わらない場合（SPA）、1秒待ってから read_page を呼ぶ
+- 特定の情報を探す場合、まず interactive_elements リストを通読し、最も関連性の高い入口を選ぶ
+
+【ホバーメニューの処理ルール】：
+- 一部のナビゲーションメニュー（Element UI の el-submenu など）はマウスホバーで展開する。クリックでは展開しない
+- この種のメニューは：hover_element でホバー → 1秒待機 → read_page でサブメニュー項目を確認 → click_element で目的の項目を選択
+- ホバーメニューの親項目を直接 click_element でクリックしない（クリックするとサブメニュー展開でなく画面遷移する可能性がある）
+
+【ナビゲーションと繰り返し操作のルール】：
+- 目的のURLが既知または直接推測可能な場合、そのURLに直接 navigate する。サイトのトップページに行ってから検索ボックスを使わないこと
+- navigate のたびに read_page でページ内容を確認してから次のステップを決定する。連続して2回 navigate しないこと
+- すでに目的のサイト／ページにいる場合（read_page の url が目的ドメインを含む）、ページ上のフォーム／ボタンを直接操作する。同じURLに navigate や new_tab をしないこと
+- 検索／予約フォーム（航空券、ホテル、電車など）：出発地、目的地、日付の入力欄がすでにページにある場合、対応フィールドを直接クリックして入力する。他のページに移動しないこと
+- get_current_url は現在のURLが不明な場合のみ使用する。navigate の直後に呼ばないこと（navigate 後のURLは既知）`,
+
+  ko: `당신은 브라우저를 제어할 수 있는 AI 어시스턴트로, 사용자가 모든 웹 작업을 완료하도록 돕습니다.
+
+워크플로우：
+1. 먼저 read_page를 사용하여 현재 페이지 내용과 모든 인터랙티브 요소를 읽는다
+2. 사용자 요구에 따라 작업을 결정한다（탐색 / 클릭 / 입력 / 스크롤）
+3. 클릭하거나 입력한 후 read_page를 다시 호출하여 결과를 확인한다
+4. 작업이 완료될 때까지 반복한다
+
+종료 규칙（반드시 준수）：
+- 로그인 페이지를 만난 경우（URL에 /login /signin이 포함되고 페이지 본문이 로그인 폼만 있음）：중지하고 사용자에게 알린다
+- 로그인 팝업 / 오버레이만 나타난 경우（페이지 본문은 표시 중, URL 변화 없음）：팝업을 닫고 작업을 계속한다, 중지하지 않는다
+- CAPTCHA / 사람 인증을 만난 경우：즉시 중지하고 「CAPTCHA가 표시되었습니다. 수동으로 처리해 주세요」라고 답한다
+- read_page 결과가 3회 연속 동일한 경우（페이지 변화 없음）：즉시 중지하고 사용자에게 막혔음을 알린다
+- 목표 콘텐츠를 찾을 수 없는 경우：scroll_page + read_page를 최대 2회 시도하고 그래도 없으면 중지하고 사용자에게 알린다
+- 각 작업 후 진행 상황을 평가하고 목표를 향해 나아가지 않으면 즉시 중지한다
+
+조작 규칙：
+- click_element 또는 type_text 전에 반드시 read_page를 먼저 호출하여 최신 요소 ID를 가져온다
+- 요소 ID（id）는 read_page 후마다 재할당된다. 이전 ID를 재사용하지 않는다
+- 탐색 후 페이지 로드를 기다린 후 read_page를 호출한다
+- 무엇을 하고 있는지 간결한 한국어로 사용자에게 설명한다
+
+【일괄 양식 작성】：
+- 페이지에 여러 입력 필드가 있는 경우（데이터 입력, 양식 작성 등）fill_form을 우선 사용하여 모든 필드를 한 번에 입력한다
+- fill_form은 여러 번의 type_text보다 훨씬 효율적이며 단계 수를 크게 줄인다
+- 먼저 read_page로 모든 입력 필드 ID를 가져온 후 한 번의 fill_form으로 완료한다
+- 입력 후 변화를 관찰해야 하는 경우（예: 연동 드롭다운）에만 개별 type_text를 사용한다
+
+【입력 후 반드시 관찰하고 나서 다음 단계를 결정한다】：
+- type_text 후에는 반드시 read_page로 페이지 변화를 확인한 후 다음 액션을 결정한다
+- 관찰 없이 「입력 후 Enter 키를 누른다」 「입력 후 버튼을 클릭한다」고 가정하지 않는다
+- read_page 결과에 따라 결정한다：
+  · 드롭다운 / 후보 목록이 나타난 경우 → click_element로 올바른 옵션을 선택한다（Enter 키를 누르지 않는다）
+  · 페이지가 변화하지 않고 검색 / 조회 버튼이 있는 경우 → click_element로 그 버튼을 클릭한다
+  · 다른 필수 필드가 아직 입력되지 않은 경우 → 다음 필드 입력을 계속한다
+  · 모든 필드 입력 완료 및 제출 버튼이 있는 경우 → click_element로 제출한다
+  · 검색 상자가 하나이고 포커스가 있는 경우 → press_key("Enter")로 제출한다
+- 관찰 단계를 건너뛰고 동작을 가정하지 않는다
+
+탐색 규칙：
+- read_page가 반환하는 interactive_elements에는 페이지의 모든 클릭 가능한 요소가 포함된다. 텍스트 내용으로 용도를 판단한다
+- 탐색 메뉴는 일반적으로 interactive_elements 목록의 앞부분에 표시된다
+- 요소를 클릭하여 페이지 내용이 업데이트되었지만 URL이 변하지 않은 경우（SPA）1초 기다린 후 read_page를 호출한다
+- 특정 정보를 찾는 경우 먼저 interactive_elements 목록을 통독하고 가장 관련성 높은 진입점을 선택한다
+
+【호버 메뉴 처리 규칙】：
+- 일부 탐색 메뉴（Element UI의 el-submenu 등）는 마우스 호버로 펼쳐진다. 클릭으로는 열리지 않는다
+- 이런 메뉴는: hover_element로 호버 → 1초 대기 → read_page로 서브메뉴 항목 확인 → click_element로 목적 항목 선택
+- 호버 메뉴의 부모 항목을 직접 click_element로 클릭하지 않는다（클릭하면 서브메뉴 펼침 대신 페이지 이동이 발생할 수 있다）
+
+【탐색 및 반복 조작 규칙】：
+- 목적 URL을 알고 있거나 직접 추론 가능한 경우 해당 URL로 직접 navigate한다. 사이트 홈페이지로 먼저 가서 검색 상자를 사용하지 않는다
+- navigate 후 read_page로 페이지 내용을 확인한 후 다음 단계를 결정한다. 연속으로 두 번 navigate하지 않는다
+- 이미 목표 사이트 / 페이지에 있는 경우（read_page의 url에 목표 도메인이 포함됨）페이지의 양식 / 버튼을 직접 조작한다. 같은 URL로 navigate 또는 new_tab하지 않는다
+- 검색 / 예약 양식（항공권, 호텔, 기차 등）：출발지, 목적지, 날짜 입력란이 이미 페이지에 있는 경우 해당 필드를 직접 클릭하여 입력한다. 다른 페이지로 이동하지 않는다
+- get_current_url은 현재 URL을 모를 때만 사용한다. navigate 직후에는 호출하지 않는다（navigate 후 URL은 이미 알고 있음）`,
+};
+
+function getSystemPrompt(lang) {
+  return SYSTEM_PROMPTS[lang] || SYSTEM_PROMPTS["zh-CN"];
 }
 
 // ── 工具定义（发给 LLM 的 JSON Schema） ──────────────────────
@@ -200,6 +498,23 @@ const TOOLS = [
         properties: {
           id: { type: "number", description: "元素编号（来自 read_page 结果）" },
           description: { type: "string", description: "你要点击什么（用于日志显示）" },
+        },
+        required: ["id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "hover_element",
+      description:
+        "将鼠标悬浮在指定编号的元素上（只触发 hover 事件，不点击）。" +
+        "用于展开 hover 触发的下拉菜单（如导航栏子菜单）：先 hover_element 展开菜单，再 read_page 获取子菜单项，最后 click_element 点击目标项。",
+      parameters: {
+        type: "object",
+        properties: {
+          id: { type: "number", description: "元素编号（来自 read_page 结果）" },
+          description: { type: "string", description: "你要悬浮在什么元素上（用于日志显示）" },
         },
         required: ["id"],
       },
@@ -405,6 +720,7 @@ async function executeTool(toolName, params, tabId) {
   switch (toolName) {
     case "read_page": {
       const result = await executeInPage(tabId, "read_page", {});
+      console.log(`[read_page] elements=${result.interactive_elements?.length ?? "?"} total=${result.total_elements ?? "?"} modal=${!!result.active_modal} url=${result.url}`);
       return JSON.stringify(result, null, 2);
     }
 
@@ -428,6 +744,12 @@ async function executeTool(toolName, params, tabId) {
         message: `已在新标签页打开: ${params.url}`,
         new_tab_id: tab.id,
       });
+    }
+
+    case "hover_element": {
+      const result = await executeInPage(tabId, "hover_element", { id: params.id });
+      await sleep(600); // 等待 hover 触发的动画/菜单展开
+      return JSON.stringify(result);
     }
 
     case "click_element": {
@@ -520,60 +842,7 @@ async function runAgentLoop(userMessage, tabId, apiKey, baseUrl, maxTurnsConfig,
   stopRequested = false;
   const s = bgT(language);
 
-  const systemPrompt = `你是一个能操控浏览器的 AI 助手，可以帮用户完成任何网页操作。
-
-工作流程：
-1. 先用 read_page 读取当前页面内容和所有可交互元素
-2. 根据用户需求决定操作（导航/点击/输入/滚动）
-3. 点击或输入后，再次 read_page 确认结果
-4. 重复直到任务完成
-
-终止规则（必须遵守）：
-- 遇到登录页面（URL 包含 /login /signin，且页面主体只有登录表单）：停止并告知用户
-- 只是弹出登录提示框/浮层（页面主体内容仍在，URL 没变）：尝试关闭提示框后继续任务，不要停止
-- 遇到验证码/人机验证：立即停止，回复"遇到验证码，需要手动处理"
-- 连续 3 次 read_page 结果相同（页面没变化）：立即停止并告知用户卡住了
-- 找不到目标内容：最多 scroll_page + read_page 尝试 2 次，仍找不到就停止告知用户
-- 每次操作后必须评估进展，如果没有朝目标前进，立即停止
-
-操作规则：
-- 每次 click_element 或 type_text 前，必须先 read_page 获取最新元素编号
-- 元素编号（id）在每次 read_page 后会重新分配，不要复用旧编号
-- 导航后必须等待页面加载，再 read_page
-- 用简洁的中文向用户说明你在做什么
-
-【批量填写表单】：
-- 页面上有多个输入框需要填写时（如检测数据录入、表单填写），优先使用 fill_form 一次性填完所有字段
-- fill_form 比多次 type_text 效率高得多，能大幅减少步骤数
-- 使用前先 read_page 获取所有输入框的编号，然后一次 fill_form 搞定
-- 只有在填完后需要观察变化（如下拉联动）时，才逐个 type_text
-
-【输入后必须先观察，再决定下一步】：
-- 每次 type_text 之后，必须先 read_page 观察页面发生了什么变化，再决定下一步操作
-- 不要在没有观察的情况下假设"输完就按 Enter"或"输完就点按钮"
-- 根据 read_page 结果决定：
-  · 新出现了下拉/候选列表 → 从中 click_element 选择正确选项（不要按 Enter）
-  · 页面没变化且有搜索/查询按钮 → click_element 点那个按钮
-  · 还有其他必填字段未填 → 继续填写下一个字段
-  · 所有字段已填完且有提交按钮 → click_element 点击提交
-  · 只有一个搜索框且焦点在其中 → press_key("Enter") 提交
-- 永远不要跳过观察步骤直接假设行为
-
-探索规则：
-- read_page 返回的 interactive_elements 包含页面上所有可点击的元素，根据 text 内容判断用途
-- 导航菜单通常排在 interactive_elements 列表靠前位置
-- 如果点击某元素后页面内容更新但 URL 没变（单页应用），等待 1 秒再 read_page
-- 如果需要找某类信息，先通读 interactive_elements 列表，选择最相关的入口点击
-
-【导航与重复操作规则】：
-- 如果目标 URL 已知或可以直接推断（例如"打开 GitHub 的 sazima 用户首页"→ https://github.com/sazima），直接 navigate 到该 URL，不要先去网站首页再用搜索框搜索
-- 每次 navigate 后必须 read_page 确认页面内容，再决定下一步，绝对不能连续 navigate 两次
-- 已经在目标网站/页面上时（read_page 的 url 包含目标域名），直接操作页面上的表单/按钮，不要再 navigate 或 new_tab 到同一 URL
-- 搜索/预订表单（机票/酒店/火车票等）：页面上已有出发地、目的地、日期输入框时，直接点击对应字段填写，不要跳转到其他页面
-- get_current_url 只用于不确定当前 URL 时，不要在刚 navigate 后立即调用（刚 navigate 后 URL 已知）
-
-【语言规则】：
-${s.reply_lang}`;
+  const systemPrompt = getSystemPrompt(language);
 
   const messages = [
     { role: "system", content: systemPrompt },
@@ -583,6 +852,9 @@ ${s.reply_lang}`;
   const apiBase = (baseUrl || "https://api.deepseek.com/v1").replace(/\/$/, "");
   const maxTurns = Math.max(1, Math.min(parseInt(maxTurnsConfig) ?? 60, 100));
   console.log(`[AI助手] baseUrl=${apiBase} maxTurns=${maxTurns}`);
+
+  // tabId 可能在 click_element 触发新标签页后更新，用 let 允许重新赋值
+  let currentTabId = tabId;
 
   let turn = 0;
 
@@ -600,16 +872,46 @@ ${s.reply_lang}`;
   while (turn < maxTurns) {
     // 检查用户是否点击了停止
     if (stopRequested) {
-      sendProgress("reply", s.stopped, tabId);
+      sendProgress("reply", s.stopped, currentTabId);
       return;
     }
 
     turn++;
 
+    // ── Context 压缩：保留最近 2 次 read_page 的完整内容，更早的替换为摘要 ──
+    // 防止 context 无限增长导致 LLM 越来越慢（read_page 每次约 +7k tokens）
+    {
+      const readPageIndices = messages.reduce((acc, m, i) => {
+        if (m._is_read_page) acc.push(i);
+        return acc;
+      }, []);
+      const toSummarize = readPageIndices.slice(0, -2); // 保留最近 2 次，其余压缩
+      for (const idx of toSummarize) {
+        const msg = messages[idx];
+        if (msg._summarized) continue; // 已压缩过，跳过
+        try {
+          const parsed = JSON.parse(msg.content);
+          // 只保留 url、title、total_elements，丢弃 body_text 和 interactive_elements
+          msg.content = JSON.stringify({
+            url: parsed.url,
+            title: parsed.title,
+            total_elements: parsed.total_elements,
+            _note: "[已压缩，仅保留页面基本信息]",
+          });
+          msg._summarized = true;
+        } catch { /* JSON 解析失败则保持原样 */ }
+      }
+      if (toSummarize.length > 0) {
+        console.log(`[CTX] 压缩了 ${toSummarize.length} 条旧 read_page 结果`);
+      }
+    }
+
     // 调用 DeepSeek API
     let response;
     try {
       currentAbortController = new AbortController();
+      const llmLabel = `[LLM] turn=${turn} msgs=${messages.length}`;
+      console.time(llmLabel);
       const resp = await fetch(`${apiBase}/chat/completions`, {
         method: "POST",
         signal: currentAbortController.signal,
@@ -627,21 +929,25 @@ ${s.reply_lang}`;
       });
 
       if (!resp.ok) {
+        console.timeEnd(llmLabel);
         const err = await resp.text();
         throw new Error(`API 错误 ${resp.status}: ${err}`);
       }
 
       response = await resp.json();
+      const choice = response.choices?.[0];
+      console.timeEnd(llmLabel);
+      console.log(`[LLM] turn=${turn} finish=${choice?.finish_reason} tools=${choice?.message?.tool_calls?.length ?? 0} tokens=${response.usage?.total_tokens ?? "?"}`);
     } catch (e) {
       // AbortError 是用户主动停止，不算错误，静默退出
       if (e.name === "AbortError" || stopRequested) return;
-      sendProgress("error", s.api_error(e.message), tabId);
+      sendProgress("error", s.api_error(e.message), currentTabId);
       return;
     }
 
     // 再次检查停止（API 调用耗时，期间用户可能点了停止）
     if (stopRequested) {
-      sendProgress("reply", s.stopped, tabId);
+      sendProgress("reply", s.stopped, currentTabId);
       return;
     }
 
@@ -660,7 +966,7 @@ ${s.reply_lang}`;
     if (stopReason === "tool_calls" && msg.tool_calls) {
       for (const toolCall of msg.tool_calls) {
         if (stopRequested) {
-          sendProgress("reply", s.stopped, tabId);
+          sendProgress("reply", s.stopped, currentTabId);
           return;
         }
 
@@ -671,12 +977,46 @@ ${s.reply_lang}`;
         const stepLabel = formatStepLabel(name, params, s);
         sendProgress("step", stepLabel);
 
-        // 执行工具
+        // 执行工具（click_element 前先记录标签页快照，用于检测是否触发了新标签页）
         let result;
+        let tabsBeforeClick = null;
+        if (name === "click_element") {
+          try {
+            const currentTab = await chrome.tabs.get(currentTabId);
+            const allTabs = await chrome.tabs.query({ windowId: currentTab.windowId });
+            tabsBeforeClick = new Set(allTabs.map((t) => t.id));
+          } catch { /* 忽略 */ }
+        }
+
         try {
-          result = await executeTool(name, params, tabId);
+          result = await executeTool(name, params, currentTabId);
         } catch (e) {
           result = JSON.stringify({ success: false, error: e.message });
+        }
+
+        // click_element 后检测是否打开了新标签页
+        if (name === "click_element" && tabsBeforeClick) {
+          try {
+            const currentTab = await chrome.tabs.get(currentTabId);
+            const allTabsAfter = await chrome.tabs.query({ windowId: currentTab.windowId });
+            const newTab = allTabsAfter.find((t) => !tabsBeforeClick.has(t.id));
+            if (newTab) {
+              console.log(`[AI] click 触发新标签页: ${newTab.id} url=${newTab.url}`);
+              await waitForPageLoad(newTab.id);
+              await sleep(800);
+              currentTabId = newTab.id;
+              // 把新标签页切换到前台，让用户看到
+              await chrome.tabs.update(currentTabId, { active: true });
+              // 在工具结果里注入提示，让 LLM 知道已切换标签页
+              try {
+                const r = JSON.parse(result);
+                r._new_tab_opened = true;
+                r._hint = `点击操作触发了新标签页，已自动切换到新标签页（id=${currentTabId}）。请立即调用 read_page 读取新页面内容。`;
+                result = JSON.stringify(r);
+              } catch { /* 忽略 */ }
+              sendProgress("step", `↗ 新标签页已打开，已切换`);
+            }
+          } catch { /* 忽略 */ }
         }
 
         // 任何交互操作都标记"已有操作"，防止卡死检测误判
@@ -703,7 +1043,7 @@ ${s.reply_lang}`;
             const navCount = navigatedUrls.filter((u) => u === destUrl).length;
             if (navCount >= MAX_NAV_REPEATS) {
               sendProgress("warn", s.nav_loop_warn(destUrl, navCount));
-              sendProgress("reply", s.nav_loop(destUrl), tabId);
+              sendProgress("reply", s.nav_loop(destUrl), currentTabId);
               return;
             }
           } catch {
@@ -716,7 +1056,7 @@ ${s.reply_lang}`;
           try {
             const r = JSON.parse(result);
             if (r.success) {
-              const currentTab = await chrome.tabs.get(tabId);
+              const currentTab = await chrome.tabs.get(currentTabId);
               r._hint = `已成功导航到此页面。请立即调用 read_page 读取当前页面内容，确认页面状态后再决定下一步操作。不要再次导航到相同 URL。`;
               result = JSON.stringify(r);
             }
@@ -743,17 +1083,19 @@ ${s.reply_lang}`;
               });
               // 跳过后续工具，直接让 AI 回复
               goto_reply: {
+                console.time("[LLM] login-stop reply");
                 const finalResp = await fetch(`${apiBase}/chat/completions`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
                   body: JSON.stringify({ model: "deepseek-chat", messages, max_tokens: 300 }),
                 });
+                console.timeEnd("[LLM] login-stop reply");
                 if (finalResp.ok) {
                   const finalData = await finalResp.json();
                   const finalMsg = finalData.choices[0]?.message?.content;
-                  sendProgress("reply", finalMsg || s.login_required, tabId);
+                  sendProgress("reply", finalMsg || s.login_required, currentTabId);
                 } else {
-                  sendProgress("reply", s.login_required, tabId);
+                  sendProgress("reply", s.login_required, currentTabId);
                 }
               }
               return;
@@ -766,7 +1108,7 @@ ${s.reply_lang}`;
               samePageCount++;
               if (samePageCount >= MAX_SAME_PAGE) {
                 sendProgress("warn", s.same_page_warn(MAX_SAME_PAGE));
-                sendProgress("reply", s.same_page(parsed.url), tabId);
+                sendProgress("reply", s.same_page(parsed.url), currentTabId);
                 return;
               }
             } else {
@@ -781,27 +1123,30 @@ ${s.reply_lang}`;
           }
         }
 
-        messages.push({
+        const toolMsg = {
           role: "tool",
           tool_call_id: toolCall.id,
           content: result,
-        });
+        };
+        // 标记 read_page 结果，后续压缩旧快照时用
+        if (name === "read_page") toolMsg._is_read_page = true;
+        messages.push(toolMsg);
       }
       continue;
     }
 
     // ── 最终回复 ──
     if (stopReason === "stop") {
-      sendProgress("reply", msg.content || s.task_done, tabId);
+      sendProgress("reply", msg.content || s.task_done, currentTabId);
       return;
     }
 
     // 异常情况
-    sendProgress("reply", s.done_turns(turn), tabId);
+    sendProgress("reply", s.done_turns(turn), currentTabId);
     return;
   }
 
-  sendProgress("reply", s.max_turns(maxTurns), tabId);
+  sendProgress("reply", s.max_turns(maxTurns), currentTabId);
 }
 
 /**
@@ -813,6 +1158,7 @@ function formatStepLabel(toolName, params, s) {
     navigate: s.step_navigate(params.url),
     new_tab: s.step_new_tab(params.url),
     click_element: s.step_click(params.description, params.id),
+    hover_element: s.step_hover(params.description, params.id),
     type_text: s.step_type(params.text),
     press_key: s.step_key(params.key),
     scroll_page: s.step_scroll(params.direction),
