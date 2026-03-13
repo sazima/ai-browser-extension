@@ -18,6 +18,7 @@ const settingsPanel = document.getElementById("settingsPanel");
 const apiKeyInput = document.getElementById("apiKeyInput");
 const saveApiKeyBtn = document.getElementById("saveApiKey");
 const baseUrlInput = document.getElementById("baseUrlInput");
+const modelInput = document.getElementById("modelInput");
 const maxTurnsInput = document.getElementById("maxTurnsInput");
 const inputHint = document.getElementById("inputHint");
 const languageSelect = document.getElementById("languageSelect");
@@ -40,7 +41,7 @@ async function init() {
   // 先初始化语言（applyTranslations 需在 DOM 填充 storage 值之前运行）
   await initLang();
 
-  const stored = await chrome.storage.local.get(["deepseekApiKey", "baseUrl", "maxTurns"]);
+  const stored = await chrome.storage.local.get(["deepseekApiKey", "baseUrl", "model", "maxTurns"]);
 
   if (stored.deepseekApiKey) {
     apiKeyInput.value = stored.deepseekApiKey;
@@ -48,6 +49,7 @@ async function init() {
     showNoApiKeyHint();
   }
   if (stored.baseUrl) baseUrlInput.value = stored.baseUrl;
+  if (stored.model) modelInput.value = stored.model;
   if (stored.maxTurns) maxTurnsInput.value = stored.maxTurns;
 
   // 同步语言选择器显示当前语言
@@ -109,12 +111,14 @@ saveApiKeyBtn.addEventListener("click", async () => {
     return;
   }
   const baseUrl = baseUrlInput.value.trim();
+  const model = modelInput.value.trim();
   const maxTurns = parseInt(maxTurnsInput.value) || 60;
   const language = languageSelect.value;
 
   await chrome.storage.local.set({
     deepseekApiKey: key,
     baseUrl: baseUrl || "",
+    model: model || "",
     maxTurns,
     language,
   });
@@ -185,7 +189,7 @@ async function sendMessage() {
   const text = messageInput.value.trim();
   if (!text) return;
 
-  const stored = await chrome.storage.local.get(["deepseekApiKey", "baseUrl", "maxTurns"]);
+  const stored = await chrome.storage.local.get(["deepseekApiKey", "baseUrl", "model", "maxTurns"]);
   if (!stored.deepseekApiKey) {
     settingsPanel.classList.add("open");
     apiKeyInput.focus();
@@ -229,6 +233,7 @@ async function sendMessage() {
     tabId: tab.id,
     apiKey: stored.deepseekApiKey,
     baseUrl: stored.baseUrl || "",
+    model: stored.model || "",
     maxTurns: stored.maxTurns ?? 60,
     language: currentLang,
   });

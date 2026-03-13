@@ -201,10 +201,13 @@ const SYSTEM_PROMPTS = {
 - 如果点击某元素后页面内容更新但 URL 没变（单页应用），等待 1 秒再 read_page
 - 如果需要找某类信息，先通读 interactive_elements 列表，选择最相关的入口点击
 
-【悬浮菜单处理规则】：
+【悬浮菜单 / 悬浮按钮处理规则】：
 - 部分导航菜单（如 Element UI 的 el-submenu）是鼠标悬浮展开的，不是点击展开
 - 遇到这类菜单时：用 hover_element 悬浮在菜单项上 → wait 1秒 → read_page 查看子菜单项 → click_element 点击目标子项
 - 不要直接 click_element 点击悬浮菜单的父项，否则可能触发导航跳转而非展开子菜单
+- 部分界面（如 GitLab / GitHub 代码评审）的操作按钮仅在鼠标悬浮到某行时才显示（CSS :hover）
+- 处理方式：hover_element 悬浮在目标行的某个可见元素上 → read_page（此时隐藏按钮已被强制显示）→ click_element 点击目标按钮
+- hover_element 的 id 可以是目标行内任何已识别的元素（如行号、文件名链接等），不必是按钮本身
 
 【导航与重复操作规则】：
 - 如果目标 URL 已知或可以直接推断（例如"打开 GitHub 的 sazima 用户首页"→ https://github.com/sazima），直接 navigate 到该 URL，不要先去网站首页再用搜索框搜索
@@ -258,10 +261,13 @@ const SYSTEM_PROMPTS = {
 - 如果點擊某元素後頁面內容更新但 URL 沒變（單頁應用），等待 1 秒再 read_page
 - 如果需要找某類資訊，先通讀 interactive_elements 列表，選擇最相關的入口點擊
 
-【懸浮選單處理規則】：
+【懸浮選單 / 懸浮按鈕處理規則】：
 - 部分導航選單（如 Element UI 的 el-submenu）是滑鼠懸浮展開的，不是點擊展開
 - 遇到這類選單時：用 hover_element 懸浮在選單項上 → wait 1秒 → read_page 查看子選單項 → click_element 點擊目標子項
 - 不要直接 click_element 點擊懸浮選單的父項，否則可能觸發導航跳轉而非展開子選單
+- 部分介面（如 GitLab / GitHub 程式碼審查）的操作按鈕僅在滑鼠懸浮到某行時才顯示（CSS :hover）
+- 處理方式：hover_element 懸浮在目標行的某個可見元素上 → read_page（此時隱藏按鈕已被強制顯示）→ click_element 點擊目標按鈕
+- hover_element 的 id 可以是目標行內任何已識別的元素（如行號、檔案名連結等），不必是按鈕本身
 
 【導航與重複操作規則】：
 - 如果目標 URL 已知或可以直接推斷，直接 navigate 到該 URL，不要先去網站首頁再用搜尋框搜尋
@@ -315,10 +321,13 @@ Exploration rules:
 - If clicking an element updates page content but the URL does not change (SPA), wait 1 second then call read_page
 - When looking for certain information, first read through the interactive_elements list and choose the most relevant entry point
 
-[Hover menu handling rules]:
+[Hover menu / hover button handling rules]:
 - Some navigation menus (e.g. Element UI's el-submenu) expand on mouse hover, not on click
 - For these menus: hover_element on the menu item → wait 1 second → read_page to see submenu items → click_element to select the target item
 - Do NOT directly click_element on a hover menu's parent item — clicking may trigger navigation instead of expanding the submenu
+- Some interfaces (e.g. GitLab / GitHub code review) only show action buttons when hovering over a row (CSS :hover)
+- Approach: hover_element on any visible element in the target row → read_page (hidden buttons are now force-revealed) → click_element on the target button
+- The id for hover_element can be any already-identified element in that row (e.g. a line number link, file name); it does not need to be the button itself
 
 [Navigation and repeated operation rules]:
 - If the target URL is known or can be directly inferred (e.g. "open GitHub user sazima's homepage" → https://github.com/sazima), navigate directly to that URL; do not go to the site homepage first and then use the search box
@@ -372,10 +381,13 @@ Exploration rules:
 - 要素をクリックしてページ内容が更新されたがURLが変わらない場合（SPA）、1秒待ってから read_page を呼ぶ
 - 特定の情報を探す場合、まず interactive_elements リストを通読し、最も関連性の高い入口を選ぶ
 
-【ホバーメニューの処理ルール】：
+【ホバーメニュー / ホバーボタンの処理ルール】：
 - 一部のナビゲーションメニュー（Element UI の el-submenu など）はマウスホバーで展開する。クリックでは展開しない
 - この種のメニューは：hover_element でホバー → 1秒待機 → read_page でサブメニュー項目を確認 → click_element で目的の項目を選択
 - ホバーメニューの親項目を直接 click_element でクリックしない（クリックするとサブメニュー展開でなく画面遷移する可能性がある）
+- 一部のUI（GitLab / GitHub のコードレビューなど）では、行にホバーしたときだけ操作ボタンが表示される（CSS :hover）
+- 対処法：対象行の任意の可視要素に hover_element でホバー → read_page（隠しボタンが強制表示される）→ click_element でボタンをクリック
+- hover_element の id は対象行内の任意の識別済み要素でよい（行番号リンク、ファイル名など）。ボタン自体でなくてもよい
 
 【ナビゲーションと繰り返し操作のルール】：
 - 目的のURLが既知または直接推測可能な場合、そのURLに直接 navigate する。サイトのトップページに行ってから検索ボックスを使わないこと
@@ -429,10 +441,13 @@ Exploration rules:
 - 요소를 클릭하여 페이지 내용이 업데이트되었지만 URL이 변하지 않은 경우（SPA）1초 기다린 후 read_page를 호출한다
 - 특정 정보를 찾는 경우 먼저 interactive_elements 목록을 통독하고 가장 관련성 높은 진입점을 선택한다
 
-【호버 메뉴 처리 규칙】：
+【호버 메뉴 / 호버 버튼 처리 규칙】：
 - 일부 탐색 메뉴（Element UI의 el-submenu 등）는 마우스 호버로 펼쳐진다. 클릭으로는 열리지 않는다
 - 이런 메뉴는: hover_element로 호버 → 1초 대기 → read_page로 서브메뉴 항목 확인 → click_element로 목적 항목 선택
 - 호버 메뉴의 부모 항목을 직접 click_element로 클릭하지 않는다（클릭하면 서브메뉴 펼침 대신 페이지 이동이 발생할 수 있다）
+- 일부 UI（GitLab / GitHub 코드 리뷰 등）는 행에 호버할 때만 동작 버튼이 표시된다（CSS :hover）
+- 처리 방법: 대상 행의 임의 가시 요소에 hover_element로 호버 → read_page（숨겨진 버튼이 강제로 표시됨）→ click_element로 버튼 클릭
+- hover_element의 id는 해당 행에서 이미 식별된 임의 요소여도 된다（행 번호 링크, 파일명 등）. 버튼 자체일 필요는 없다
 
 【탐색 및 반복 조작 규칙】：
 - 목적 URL을 알고 있거나 직접 추론 가능한 경우 해당 URL로 직접 navigate한다. 사이트 홈페이지로 먼저 가서 검색 상자를 사용하지 않는다
@@ -507,9 +522,10 @@ const TOOLS = [
     type: "function",
     function: {
       name: "hover_element",
-      description:
+        description:
         "将鼠标悬浮在指定编号的元素上（只触发 hover 事件，不点击）。" +
-        "用于展开 hover 触发的下拉菜单（如导航栏子菜单）：先 hover_element 展开菜单，再 read_page 获取子菜单项，最后 click_element 点击目标项。",
+        "用途1：展开 hover 触发的下拉菜单（如导航栏子菜单）——先 hover_element 展开，再 read_page，再 click_element。" +
+        "用途2：显示 CSS :hover 才出现的隐藏按钮（如 GitLab/GitHub 代码行旁的【添加评论】按钮）——hover_element 悬浮在目标行的任意可见元素上，再 read_page 即可看到并点击这些按钮。",
       parameters: {
         type: "object",
         properties: {
@@ -838,7 +854,7 @@ function isLoginPage(pageResult) {
   }
 }
 
-async function runAgentLoop(userMessage, tabId, apiKey, baseUrl, maxTurnsConfig, language = "zh-CN") {
+async function runAgentLoop(userMessage, tabId, apiKey, baseUrl, model, maxTurnsConfig, language = "zh-CN") {
   stopRequested = false;
   const s = bgT(language);
 
@@ -850,8 +866,9 @@ async function runAgentLoop(userMessage, tabId, apiKey, baseUrl, maxTurnsConfig,
   ];
 
   const apiBase = (baseUrl || "https://api.deepseek.com/v1").replace(/\/$/, "");
+  const modelName = model || "deepseek-chat";
   const maxTurns = Math.max(1, Math.min(parseInt(maxTurnsConfig) ?? 60, 100));
-  console.log(`[AI助手] baseUrl=${apiBase} maxTurns=${maxTurns}`);
+  console.log(`[AI助手] baseUrl=${apiBase} model=${modelName} maxTurns=${maxTurns}`);
 
   // tabId 可能在 click_element 触发新标签页后更新，用 let 允许重新赋值
   let currentTabId = tabId;
@@ -920,7 +937,7 @@ async function runAgentLoop(userMessage, tabId, apiKey, baseUrl, maxTurnsConfig,
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: "deepseek-chat",
+          model: modelName,
           messages,
           tools: TOOLS,
           tool_choice: "auto",
@@ -1173,8 +1190,8 @@ function formatStepLabel(toolName, params, s) {
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "run_agent") {
-    const { userMessage, tabId, apiKey, baseUrl, maxTurns, language } = message;
-    runAgentLoop(userMessage, tabId, apiKey, baseUrl, maxTurns, language).catch((e) => {
+    const { userMessage, tabId, apiKey, baseUrl, model, maxTurns, language } = message;
+    runAgentLoop(userMessage, tabId, apiKey, baseUrl, model, maxTurns, language).catch((e) => {
       sendProgress("error", bgT(language).agent_error(e.message), tabId);
     });
     sendResponse({ started: true });

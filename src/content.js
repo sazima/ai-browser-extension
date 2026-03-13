@@ -20,6 +20,21 @@ window.__aiAssistantLoaded = true;
 // 存储元素编号 → DOM 元素 的映射（每次 read_page 后重建）
 const elementMap = new Map();
 
+// hover_element 强制显示的元素列表（下次 read_page 或 click 时恢复原样）
+let hoverRevealedEls = [];
+
+function restoreHoverRevealed() {
+  for (const { el, orig } of hoverRevealedEls) {
+    el.style.display       = orig.display;
+    el.style.opacity       = orig.opacity;
+    el.style.visibility    = orig.visibility;
+    el.style.pointerEvents = orig.pointerEvents;
+    if (orig.ariaLabel === null) el.removeAttribute("aria-label");
+    else if (orig.ariaLabel !== undefined) el.setAttribute("aria-label", orig.ariaLabel);
+  }
+  hoverRevealedEls = [];
+}
+
 // ── 覆盖层（Overlay）──────────────────────────────────────────
 
 const OVERLAY_ID = "__ai_overlay__";
@@ -250,6 +265,10 @@ function readPage() {
     console.log(`[AI-readPage] ${label}: ${(performance.now() - t0).toFixed(1)}ms`);
   };
 
+  // 若上次 hover_element 强制显示了某些元素，read_page 时保持显示状态，
+  // 使 AI 可以在列表中看到并点击它们（点击后 clickElement 会自动恢复）
+  // 注意：不在此处调用 restoreHoverRevealed()，让已显示的按钮继续可见
+
   elementMap.clear();
   let counter = 1;
 
@@ -376,9 +395,38 @@ function readPage() {
   let activeModal = null;
   try { activeModal = detectActiveModal(); } catch { /* 忽略 */ }
 
+  // 检测页面中存在的可滚动子容器（DataTables、虚拟列表等固定高度+overflow:auto的区域）
+  // 这些容器本身在视口内时，容器内部超出容器可视高度的元素也应纳入识别
+  // 只扫描常见的容器标签，避免遍历整个 DOM
+  const scrollContainers = [];
+  try {
+    const scrollCandidates = document.querySelectorAll(
+      "div, section, article, main, aside, ul, ol, tbody, table, " +
+      '[class*="scroll"], [class*="table-body"], [class*="list-wrap"], [class*="grid-body"]'
+    );
+    for (const el of scrollCandidates) {
+      if (!isVisible(el)) continue;
+      const s = window.getComputedStyle(el);
+      const overflowY = s.overflowY;
+      if (overflowY !== "auto" && overflowY !== "scroll") continue;
+      // 容器实际内容超出自身高度（确实可滚动），且容器本身有一定高度
+      if (el.scrollHeight <= el.clientHeight + 20) continue;
+      if (el.clientHeight < 100) continue;
+      // 容器本身须在浏览器视口内
+      const r = el.getBoundingClientRect();
+      if (r.bottom <= 0 || r.top >= vh || r.right <= 0 || r.left >= vw) continue;
+      scrollContainers.push(el);
+    }
+  } catch { /* 忽略 */ }
+
   function isInViewport(el) {
     // 模态框内的元素：不做视口过滤，全部纳入
     if (activeModal && activeModal.contains(el)) return true;
+    // 可滚动子容器（DataTables等）内的元素：只要容器本身在视口内就纳入，
+    // 避免容器内超出视口部分的行被误过滤
+    for (const sc of scrollContainers) {
+      if (sc.contains(el)) return true;
+    }
     const r = el.getBoundingClientRect();
     return r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw;
   }
@@ -528,6 +576,9 @@ function readPage() {
 function clickElement(id) {
   const el = elementMap.get(id);
   if (!el) return { success: false, error: `元素 #${id} 不存在，请先调用 read_page` };
+
+  // 点击后恢复之前 hover 强制显示的元素（避免页面 DOM 残留异常样式）
+  restoreHoverRevealed();
 
   try {
     el.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -742,19 +793,102 @@ function fillForm(fields) {
 /**
  * 悬浮在元素上（只触发 hover 事件，不点击）
  * 用于展开 hover 触发的下拉菜单，再 read_page 查看子项后点击目标
+ *
+ * 额外处理：CSS :hover 伪类无法被 JS 事件触发，因此在派发事件后，
+ * 主动扫描悬浮目标所在行/容器内被隐藏的交互元素，通过内联 style 强制显示，
+ * 使后续 read_page 能检测到这些按钮（如 GitLab 的"添加评论"按钮）。
  */
 function hoverElement(id) {
   const el = elementMap.get(id);
   if (!el) return { success: false, error: `元素 #${id} 不存在，请先调用 read_page` };
 
+  // 先恢复上次 hover 强制显示的元素
+  restoreHoverRevealed();
+
   try {
     el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.dispatchEvent(new MouseEvent("mouseover",  { bubbles: true,  cancelable: true, composed: true }));
-    el.dispatchEvent(new MouseEvent("mouseenter", { bubbles: false, cancelable: true, composed: true }));
-    el.dispatchEvent(new MouseEvent("mousemove",  { bubbles: true,  cancelable: true, composed: true }));
+
+    // 带坐标的鼠标事件（某些框架用 clientX/Y 定位）
+    const rect = el.getBoundingClientRect();
+    const cx = Math.round(rect.left + rect.width / 2);
+    const cy = Math.round(rect.top  + rect.height / 2);
+    const evInit = { bubbles: true, cancelable: true, composed: true, clientX: cx, clientY: cy };
+    el.dispatchEvent(new MouseEvent("mouseover",  evInit));
+    el.dispatchEvent(new MouseEvent("mouseenter", { ...evInit, bubbles: false }));
+    el.dispatchEvent(new MouseEvent("mousemove",  evInit));
+
+    // ── CSS :hover 补偿：强制显示附近被隐藏的交互元素 ──────────────
+    // GitLab / GitHub 等平台的"添加评论"按钮通过 CSS tr:hover .btn { display:block }
+    // 实现，JS 事件无法触发该状态，因此手动把隐藏按钮显示出来。
+    //
+    // 通用方案：沿 DOM 向上走，找"高度仍在行级范围内"的最大祖先容器。
+    // 阈值 = max(元素自身高度 × 5, 100px)。
+    // 超过此高度说明已经是区块/面板级容器，停止，不继续向上。
+    // 这样无需硬编码任何标签名或 class，适用于任何页面结构。
+    const ROW_MAX_H = Math.max(rect.height * 5, 100);
+    let container = el.parentElement;
+    let probe = el.parentElement;
+    while (probe && probe !== document.body) {
+      const r = probe.getBoundingClientRect();
+      if (r.height > 0 && r.height > ROW_MAX_H) break; // 容器太高，停止向上
+      if (r.height > 0) container = probe;              // 仍在行级范围，记录为候选
+      probe = probe.parentElement;
+    }
+    // 尝试从容器内提取"行号"信息，用于标注 reveal 出来的按钮，让 AI 知道操作的是哪一行
+    // 策略：找容器内第一个纯数字文本节点（行号格式），与任何具体框架无关
+    let lineLabel = "";
+    if (container) {
+      // 遍历容器内所有文本节点/元素，找纯数字（行号）
+      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        const t = node.textContent.trim();
+        if (/^\d+$/.test(t) && parseInt(t) < 100000) { lineLabel = `line ${t}`; break; }
+      }
+    }
+
+    if (container) {
+      const candidates = container.querySelectorAll(
+        "button, a, [role='button'], [onclick], [class*='btn'], [class*='comment'], [class*='note']"
+      );
+      for (const btn of candidates) {
+        if (btn === el) continue;
+        const s = window.getComputedStyle(btn);
+        const hidden =
+          s.display === "none" ||
+          s.opacity === "0" ||
+          s.visibility === "hidden" ||
+          parseFloat(s.opacity) < 0.05;
+        if (!hidden) continue;
+        // 保存内联样式原始值（只保存内联，不影响 CSS 规则）
+        hoverRevealedEls.push({
+          el: btn,
+          orig: {
+            display:       btn.style.display,
+            opacity:       btn.style.opacity,
+            visibility:    btn.style.visibility,
+            pointerEvents: btn.style.pointerEvents,
+            ariaLabel:     btn.getAttribute("aria-label"),
+          },
+        });
+        btn.style.display       = "inline-block";
+        btn.style.opacity       = "1";
+        btn.style.visibility    = "visible";
+        btn.style.pointerEvents = "auto";
+        // 注入行号上下文：让 AI 在 read_page 时能识别这是哪一行的按钮
+        if (lineLabel && !btn.getAttribute("aria-label")) {
+          btn.setAttribute("aria-label", `hover-revealed button (${lineLabel})`);
+        }
+      }
+    }
 
     flashElement(el, "#818cf8"); // 紫色闪烁，区别于点击的橙色
-    return { success: true, message: `悬浮在: ${getElementText(el) || el.tagName}` };
+    return {
+      success: true,
+      message: `悬浮在: ${getElementText(el) || el.tagName}${lineLabel ? ` [${lineLabel}]` : ""}`,
+      revealed: hoverRevealedEls.length,
+      line_context: lineLabel || null,
+    };
   } catch (e) {
     return { success: false, error: e.message };
   }

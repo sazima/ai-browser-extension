@@ -34,6 +34,10 @@
       <input type="text" id="baseUrlInput" class="settings-input" placeholder="https://api.deepseek.com/v1" data-i18n-placeholder="settings.baseurl.placeholder" />
       <div class="settings-hint" data-i18n="settings.baseurl.hint">留空则使用 https://api.deepseek.com/v1</div>
 
+      <label class="settings-label" style="margin-top:10px;" data-i18n="settings.model.label">模型</label>
+      <input type="text" id="modelInput" class="settings-input" placeholder="deepseek-chat" data-i18n-placeholder="settings.model.placeholder" />
+      <div class="settings-hint" data-i18n="settings.model.hint">留空则使用 deepseek-chat，也可填 gpt-4o、qwen-plus 等</div>
+
       <label class="settings-label" style="margin-top:10px;" data-i18n="settings.maxturns.label">最大轮数</label>
       <input type="number" id="maxTurnsInput" class="settings-input" placeholder="25" min="1" max="100" style="width:80px;" />
       <div class="settings-hint" data-i18n="settings.maxturns.hint">AI 最多执行多少步后强制停止（默认 25）</div>
