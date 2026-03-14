@@ -584,12 +584,31 @@ function clickElement(id) {
     el.scrollIntoView({ behavior: "smooth", block: "center" });
     el.focus();
 
-    // 先派发鼠标悬浮事件，处理 hover 触发展开的下拉菜单（如 Element UI el-submenu）
-    // mouseover 会冒泡（父元素也能收到），mouseenter 不冒泡但某些组件只监听它
-    el.dispatchEvent(new MouseEvent("mouseover",  { bubbles: true,  cancelable: true, composed: true }));
-    el.dispatchEvent(new MouseEvent("mouseenter", { bubbles: false, cancelable: true, composed: true }));
+    const rect2 = el.getBoundingClientRect();
+    const cx = Math.round(rect2.left + rect2.width / 2);
+    const cy = Math.round(rect2.top  + rect2.height / 2);
 
-    el.click();
+    // 派发完整的鼠标/指针事件序列，确保各类框架（Vue/React/原生）都能响应
+    // 部分组件（如 BlueKing bk-select）只监听 mousedown，不监听 click
+    const base = { bubbles: true, cancelable: true, composed: true, clientX: cx, clientY: cy };
+
+    // 模拟鼠标从元素左上角移动到中心的轨迹（3步），让依赖 mousemove 的组件正确响应
+    const startX = Math.round(rect2.left + 2);
+    const startY = Math.round(rect2.top  + 2);
+    for (let i = 1; i <= 3; i++) {
+      const mx = Math.round(startX + (cx - startX) * i / 3);
+      const my = Math.round(startY + (cy - startY) * i / 3);
+      el.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, cancelable: true, composed: true, clientX: mx, clientY: my }));
+    }
+
+    el.dispatchEvent(new MouseEvent("mouseover",    { ...base }));
+    el.dispatchEvent(new MouseEvent("mouseenter",   { ...base, bubbles: false }));
+    el.dispatchEvent(new PointerEvent("pointerover",  { ...base, pointerId: 1 }));
+    el.dispatchEvent(new PointerEvent("pointerdown",  { ...base, pointerId: 1 }));
+    el.dispatchEvent(new MouseEvent("mousedown",    { ...base }));
+    el.dispatchEvent(new PointerEvent("pointerup",    { ...base, pointerId: 1 }));
+    el.dispatchEvent(new MouseEvent("mouseup",      { ...base }));
+    el.dispatchEvent(new MouseEvent("click",        { ...base }));
 
     // 橙色闪烁：区别于 read_page 时的蓝色标注，让用户清楚看到点了哪里
     flashElement(el, "#f59e0b");
@@ -609,9 +628,34 @@ function typeText(id, text, clearFirst = true) {
 
   try {
     el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.focus();
 
-    const isContentEditable = el.isContentEditable;
+    // 输入前先派发完整点击序列（与 clickElement 一致）
+    // 目的：触发输入框 click 时可能出现的弹框/下拉/搜索面板，
+    // 使后续输入发生在正确的上下文中
+    const r2 = el.getBoundingClientRect();
+    const cx2 = Math.round(r2.left + r2.width / 2);
+    const cy2 = Math.round(r2.top  + r2.height / 2);
+    const base2 = { bubbles: true, cancelable: true, composed: true, clientX: cx2, clientY: cy2 };
+    el.dispatchEvent(new MouseEvent("mouseover",   { ...base2 }));
+    el.dispatchEvent(new PointerEvent("pointerdown", { ...base2, pointerId: 1 }));
+    el.dispatchEvent(new MouseEvent("mousedown",   { ...base2 }));
+    el.dispatchEvent(new PointerEvent("pointerup",   { ...base2, pointerId: 1 }));
+    el.dispatchEvent(new MouseEvent("mouseup",     { ...base2 }));
+    el.dispatchEvent(new MouseEvent("click",       { ...base2 }));
+
+    // 点击后检查焦点是否转移到了新元素（如弹框里的搜索框）
+    // 若焦点已落在另一个可输入元素上，优先对该元素输入，而非原始元素
+    const focusedEl = document.activeElement;
+    const isFocusable = (e) => e && (
+      e.tagName === "INPUT" || e.tagName === "TEXTAREA" || e.isContentEditable
+    );
+    const target = (isFocusable(focusedEl) && focusedEl !== el && focusedEl !== document.body)
+      ? focusedEl
+      : el;
+
+    target.focus();
+
+    const isContentEditable = target.isContentEditable;
     const isRichEditorIframe = el.tagName.toLowerCase() === "iframe";
 
     if (isRichEditorIframe) {
@@ -637,40 +681,38 @@ function typeText(id, text, clearFirst = true) {
 
     if (clearFirst) {
       if (isContentEditable) {
-        el.textContent = "";
+        target.textContent = "";
       } else {
-        el.value = "";
+        target.value = "";
       }
-      el.dispatchEvent(new Event("input", { bubbles: true }));
+      target.dispatchEvent(new Event("input", { bubbles: true }));
     }
 
     if (isContentEditable) {
       // contenteditable（YouTube 评论框、Notion、富文本编辑器等）
-      // 策略：先 focus 激活，再逐字符 dispatch KeyboardEvent + execCommand insertText
-      // 参考 Playwright 的 type(text, { delay }) 实现，兼容监听 keydown/keypress/input 的框架
-      el.focus();
+      target.focus();
       if (clearFirst) {
         document.execCommand("selectAll", false, null);
       }
-      // 逐字符模拟，让富文本框的事件监听器感知到真实输入
       for (const char of text) {
-        el.dispatchEvent(new KeyboardEvent("keydown",  { key: char, bubbles: true }));
-        el.dispatchEvent(new KeyboardEvent("keypress", { key: char, bubbles: true }));
+        target.dispatchEvent(new KeyboardEvent("keydown",  { key: char, bubbles: true }));
+        target.dispatchEvent(new KeyboardEvent("keypress", { key: char, bubbles: true }));
         document.execCommand("insertText", false, char);
-        el.dispatchEvent(new KeyboardEvent("keyup",    { key: char, bubbles: true }));
+        target.dispatchEvent(new KeyboardEvent("keyup",    { key: char, bubbles: true }));
       }
     } else {
       // 普通 input / textarea
-      el.value = text;
+      target.value = text;
     }
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
-    el.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }));
+    target.dispatchEvent(new Event("input", { bubbles: true }));
+    target.dispatchEvent(new Event("change", { bubbles: true }));
+    target.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }));
 
     // 绿色闪烁：表示正在输入
-    flashElement(el, "#10b981");
+    flashElement(target, "#10b981");
 
-    return { success: true, message: `在输入框输入了: "${text}"` };
+    const redirected = target !== el ? ` (焦点已转移到弹框内的输入框)` : "";
+    return { success: true, message: `在输入框输入了: "${text}"${redirected}` };
   } catch (e) {
     return { success: false, error: e.message };
   }

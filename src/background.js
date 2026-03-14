@@ -185,9 +185,11 @@ const SYSTEM_PROMPTS = {
 - 只有在填完后需要观察变化（如下拉联动）时，才逐个 type_text
 
 【输入后必须先观察，再决定下一步】：
+- type_text 在输入前会自动触发点击事件，部分搜索框（如 GitLab 全局搜索）点击后会弹出搜索面板
 - 每次 type_text 之后，必须先 read_page 观察页面发生了什么变化，再决定下一步操作
 - 不要在没有观察的情况下假设"输完就按 Enter"或"输完就点按钮"
 - 根据 read_page 结果决定：
+  · 新出现了弹框/搜索面板，其中有搜索框 → 用 type_text 在新出现的搜索框中输入，再 read_page
   · 新出现了下拉/候选列表 → 从中 click_element 选择正确选项（不要按 Enter）
   · 页面没变化且有搜索/查询按钮 → click_element 点那个按钮
   · 还有其他必填字段未填 → 继续填写下一个字段
@@ -245,9 +247,11 @@ const SYSTEM_PROMPTS = {
 - 只有在填完後需要觀察變化（如下拉聯動）時，才逐個 type_text
 
 【輸入後必須先觀察，再決定下一步】：
+- type_text 在輸入前會自動觸發點擊事件，部分搜尋框（如 GitLab 全域搜尋）點擊後會彈出搜尋面板
 - 每次 type_text 之後，必須先 read_page 觀察頁面發生了什麼變化，再決定下一步操作
 - 不要在沒有觀察的情況下假設「輸完就按 Enter」或「輸完就點按鈕」
 - 根據 read_page 結果決定：
+  · 新出現了彈框/搜尋面板，其中有搜尋框 → 用 type_text 在新出現的搜尋框中輸入，再 read_page
   · 新出現了下拉/候選清單 → 從中 click_element 選擇正確選項（不要按 Enter）
   · 頁面沒變化且有搜尋/查詢按鈕 → click_element 點那個按鈕
   · 還有其他必填欄位未填 → 繼續填寫下一個欄位
@@ -305,9 +309,11 @@ Operation rules:
 - Only use individual type_text calls when you need to observe changes after each input (e.g. cascading dropdowns)
 
 [Observe after input before deciding next step]:
+- type_text automatically triggers a click event before typing; some search fields (e.g. GitLab global search) open a search panel when clicked
 - After each type_text, always call read_page to observe what changed before deciding the next action
 - Do not assume "press Enter after typing" or "click the button after typing" without observing first
 - Based on the read_page result:
+  · A modal / search panel appeared with a search box inside → use type_text on the new search box, then read_page
   · A dropdown / suggestion list appeared → click_element to select the correct option (do not press Enter)
   · Page unchanged and a search / query button exists → click_element on that button
   · Other required fields are not yet filled → continue filling the next field
@@ -365,9 +371,11 @@ Exploration rules:
 - 入力後に変化を観察する必要がある場合（例：連動ドロップダウン）のみ個別に type_text を使う
 
 【入力後は必ず観察してから次のステップを決定する】：
+- type_text は入力前にクリックイベントを自動送信する。一部の検索フィールド（GitLab のグローバル検索など）はクリックで検索パネルが開く
 - type_text の後は、必ず read_page でページの変化を確認してから次のアクションを決定する
 - 観察せずに「入力後Enterを押す」「入力後ボタンをクリックする」と仮定しないこと
 - read_page の結果に基づいて決定する：
+  · モーダル／検索パネルが開いて検索ボックスがある場合 → 新しい検索ボックスに type_text して read_page
   · ドロップダウン／候補リストが出現した場合 → click_element で正しいオプションを選択する（Enterは押さない）
   · ページが変化せず検索／照会ボタンがある場合 → click_element でそのボタンをクリックする
   · 他の必須フィールドが未入力の場合 → 次のフィールドの入力を続ける
@@ -425,9 +433,11 @@ Exploration rules:
 - 입력 후 변화를 관찰해야 하는 경우（예: 연동 드롭다운）에만 개별 type_text를 사용한다
 
 【입력 후 반드시 관찰하고 나서 다음 단계를 결정한다】：
+- type_text는 입력 전에 클릭 이벤트를 자동으로 전송한다. 일부 검색 필드（GitLab 전역 검색 등）는 클릭 시 검색 패널이 열린다
 - type_text 후에는 반드시 read_page로 페이지 변화를 확인한 후 다음 액션을 결정한다
 - 관찰 없이 「입력 후 Enter 키를 누른다」 「입력 후 버튼을 클릭한다」고 가정하지 않는다
 - read_page 결과에 따라 결정한다：
+  · 모달 / 검색 패널이 열리고 검색 상자가 있는 경우 → 새 검색 상자에 type_text 후 read_page
   · 드롭다운 / 후보 목록이 나타난 경우 → click_element로 올바른 옵션을 선택한다（Enter 키를 누르지 않는다）
   · 페이지가 변화하지 않고 검색 / 조회 버튼이 있는 경우 → click_element로 그 버튼을 클릭한다
   · 다른 필수 필드가 아직 입력되지 않은 경우 → 다음 필드 입력을 계속한다
@@ -682,27 +692,35 @@ function sendMessageWithTimeout(tabId, payload, timeoutMs) {
 }
 
 async function executeInPage(tabId, action, params = {}) {
-  const timeoutMs = action === "read_page" ? 20000 : 8000;
-  console.log(`[AI] executeInPage start: ${action}`);
+  // 每次单独尝试的超时：read_page 允许更长（页面可能渲染中）
+  const attemptTimeout = action === "read_page" ? 12000 : 6000;
+  const MAX_ATTEMPTS = 3;
   const t0 = Date.now();
 
-  // 先尝试直接发消息（manifest 已自动注入 content.js 的情况）
-  const direct = await sendMessageWithTimeout(tabId, { action, params }, timeoutMs);
-  console.log(`[AI] executeInPage first attempt: ${Date.now() - t0}ms, got=${direct !== null}`);
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    console.log(`[AI] executeInPage attempt ${attempt}/${MAX_ATTEMPTS}: ${action}`);
+    const result = await sendMessageWithTimeout(tabId, { action, params }, attemptTimeout);
+    const elapsed = Date.now() - t0;
 
-  if (direct !== null) return direct;
+    if (result !== null) {
+      if (attempt > 1) console.log(`[AI] executeInPage succeeded on attempt ${attempt} (${elapsed}ms)`);
+      return result;
+    }
 
-  // 无响应时手动注入一次（页面在扩展安装前就打开了）
-  try {
-    await chrome.scripting.executeScript({ target: { tabId }, files: ["src/content.js"] });
-  } catch (e) {
-    return { success: false, error: `无法注入脚本: ${e.message}` };
+    console.warn(`[AI] executeInPage attempt ${attempt} timed out (${elapsed}ms)`);
+
+    if (attempt < MAX_ATTEMPTS) {
+      // 在下一次重试前，尝试重新注入 content.js（可能 crash 了或者页面刚加载完）
+      try {
+        await chrome.scripting.executeScript({ target: { tabId }, files: ["src/content.js"] });
+        await sleep(300);
+      } catch (_) { /* 已注入时会报错，忽略 */ }
+    }
   }
 
-  // 注入后重试，超时缩短为 5s（第一次已经等过了，说明页面可能真的卡死）
-  const retried = await sendMessageWithTimeout(tabId, { action, params }, 5000);
-  console.log(`[AI] executeInPage retry: ${Date.now() - t0}ms total, got=${retried !== null}`);
-  return retried ?? { success: false, error: "content script 无响应（超时）" };
+  const total = Date.now() - t0;
+  console.error(`[AI] executeInPage failed after ${MAX_ATTEMPTS} attempts (${total}ms): ${action}`);
+  return { success: false, error: `操作超时（已自动重试 ${MAX_ATTEMPTS} 次，共等待 ${Math.round(total / 1000)}s）` };
 }
 
 /**
@@ -775,6 +793,8 @@ async function executeTool(toolName, params, tabId) {
     }
 
     case "type_text": {
+      // 输入前等待 200ms：点击触发的弹框/下拉需要时间渲染，焦点转移需要稍等
+      await sleep(200);
       const result = await executeInPage(tabId, "type_text", {
         id: params.id,
         text: params.text,
