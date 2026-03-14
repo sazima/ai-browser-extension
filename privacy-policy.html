@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy – AI Browser Assistant</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 800px; margin: 40px auto; padding: 0 24px; color: #1a1a1a; line-height: 1.7; }
+    h1 { font-size: 28px; margin-bottom: 4px; }
+    .updated { color: #666; font-size: 14px; margin-bottom: 32px; }
+    h2 { font-size: 18px; margin-top: 36px; border-bottom: 1px solid #eee; padding-bottom: 6px; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 6px; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    th, td { text-align: left; padding: 10px 12px; border: 1px solid #ddd; font-size: 14px; }
+    th { background: #f5f5f5; }
+    a { color: #4f46e5; }
+    .highlight { background: #f0f0ff; border-left: 4px solid #4f46e5; padding: 12px 16px; border-radius: 4px; margin: 16px 0; }
+  </style>
+</head>
+<body>
+
+<h1>Privacy Policy</h1>
+<p class="updated">Extension: <strong>AI Browser Assistant</strong> &nbsp;|&nbsp; Last updated: March 2026</p>
+
+<div class="highlight">
+  <strong>Summary:</strong> AI Browser Assistant does not collect, store, or sell any personal data.
+  All data stays on your device or is sent directly from your browser to the AI API provider you configure.
+  We never see your data.
+</div>
+
+<h2>1. What Data Is Involved</h2>
+<table>
+  <thead>
+    <tr><th>Data Type</th><th>Where It Goes</th><th>Who Can See It</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>API Key (OpenAI / DeepSeek / other)</td>
+      <td>Stored locally in <code>chrome.storage.local</code> on your device</td>
+      <td>Only you, on your device</td>
+    </tr>
+    <tr>
+      <td>API Base URL &amp; Model name</td>
+      <td>Stored locally in <code>chrome.storage.local</code></td>
+      <td>Only you, on your device</td>
+    </tr>
+    <tr>
+      <td>Page content &amp; user instructions</td>
+      <td>Sent directly from your browser to the AI API endpoint you configured</td>
+      <td>The AI API provider you chose</td>
+    </tr>
+    <tr>
+      <td>Saved prompts (favorites)</td>
+      <td>Stored locally in <code>chrome.storage.local</code></td>
+      <td>Only you, on your device</td>
+    </tr>
+    <tr>
+      <td>Language preference, max-steps setting</td>
+      <td>Stored locally in <code>chrome.storage.local</code></td>
+      <td>Only you, on your device</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>2. How We Collect and Use Data</h2>
+<p>The extension operates entirely client-side. Specifically:</p>
+<ul>
+  <li><strong>API Key and settings</strong> – entered by you in the extension settings panel and stored in your browser's local storage. They are never transmitted to any server controlled by us.</li>
+  <li><strong>Page content</strong> – when you ask the extension to perform a task, the current page's text and interactive element information is read from the DOM in your browser and sent to the AI API endpoint you configured (e.g., <code>https://api.deepseek.com/v1</code> or your own endpoint). This transmission happens directly from your browser to that API provider. We do not proxy, log, or intercept this data.</li>
+  <li><strong>User instructions</strong> – the task description you type is sent together with page content to the AI API provider as part of the API request.</li>
+  <li><strong>Chat history</strong> – kept in memory only for the duration of your session. It is not persisted to disk or any remote server.</li>
+</ul>
+
+<h2>3. Data Sharing</h2>
+<p>We do not share any data with third parties.</p>
+<ul>
+  <li>The extension has no backend server of its own.</li>
+  <li>The only outbound network request the extension makes is the API call to the endpoint URL you provide in settings (default: <code>https://api.deepseek.com/v1</code>). This goes directly from your browser to that provider.</li>
+  <li>If you use a third-party AI provider (OpenAI, DeepSeek, etc.), their own privacy policy governs how they handle the data you send them.</li>
+</ul>
+
+<h2>4. Data Storage</h2>
+<ul>
+  <li>All settings are stored using the Chrome <code>storage.local</code> API, which keeps data on your local device and is not synced to Google's servers unless you have Chrome Sync enabled for extensions.</li>
+  <li>We do not use cookies, analytics SDKs, or any tracking technology.</li>
+  <li>No data is ever written to an external database by us.</li>
+</ul>
+
+<h2>5. Permissions Explained</h2>
+<table>
+  <thead>
+    <tr><th>Permission</th><th>Why It Is Needed</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>activeTab</code></td><td>To read and interact with the page you are currently viewing when you initiate a task.</td></tr>
+    <tr><td><code>tabs</code></td><td>To detect when a click opens a new tab and follow it automatically.</td></tr>
+    <tr><td><code>storage</code></td><td>To save your API key, settings, and saved prompts locally on your device.</td></tr>
+    <tr><td><code>sidePanel</code></td><td>To display the assistant interface in Chrome's side panel.</td></tr>
+    <tr><td><code>scripting</code></td><td>To inject the content script that reads page elements and performs actions on your behalf.</td></tr>
+    <tr><td><code>host_permissions: &lt;all_urls&gt;</code></td><td>Required so the extension can operate on any website you visit when you ask it to. No data is collected passively; the script only activates when you send a task.</td></tr>
+  </tbody>
+</table>
+
+<h2>6. Children's Privacy</h2>
+<p>This extension is not directed at children under 13. We do not knowingly collect any data from children.</p>
+
+<h2>7. Changes to This Policy</h2>
+<p>If we make material changes to this privacy policy, we will update the "Last updated" date at the top of this page. Continued use of the extension after changes constitutes acceptance of the updated policy.</p>
+
+<h2>8. Contact</h2>
+<p>If you have questions about this privacy policy, please open an issue on our
+  <a href="https://github.com/sazima/ai-browser-extension" target="_blank">GitHub repository</a>.
+</p>
+
+</body>
+</html>
