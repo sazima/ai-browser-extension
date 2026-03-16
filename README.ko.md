@@ -26,7 +26,8 @@ https://github.com/user-attachments/assets/d07743f3-d033-450f-990c-80d5e0c423c8
 ## 설치 방법
 
 ### Chrome 웹 스토어에서 설치
-*(출시 예정)*
+
+[https://chromewebstore.google.com/detail/ai-browser-assistant/iaknpppnnijhjnglammebnaclcklkgcj](https://chromewebstore.google.com/detail/ai-browser-assistant/iaknpppnnijhjnglammebnaclcklkgcj)
 
 ### 수동 설치 (개발자 모드)
 

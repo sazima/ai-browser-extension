@@ -26,7 +26,8 @@ https://github.com/user-attachments/assets/d07743f3-d033-450f-990c-80d5e0c423c8
 ## インストール
 
 ### Chrome ウェブストアからインストール
-*(近日公開予定)*
+
+[https://chromewebstore.google.com/detail/ai-browser-assistant/iaknpppnnijhjnglammebnaclcklkgcj](https://chromewebstore.google.com/detail/ai-browser-assistant/iaknpppnnijhjnglammebnaclcklkgcj)
 
 ### 手動インストール（デベロッパーモード）
 

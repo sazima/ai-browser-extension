@@ -26,7 +26,8 @@ https://github.com/user-attachments/assets/d07743f3-d033-450f-990c-80d5e0c423c8
 ## 安装方法
 
 ### 从 Chrome 应用商店安装
-*(即将上线)*
+
+[https://chromewebstore.google.com/detail/ai-browser-assistant/iaknpppnnijhjnglammebnaclcklkgcj](https://chromewebstore.google.com/detail/ai-browser-assistant/iaknpppnnijhjnglammebnaclcklkgcj)
 
 ### 手动安装（开发者模式）
 

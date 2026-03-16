@@ -26,7 +26,8 @@ https://github.com/user-attachments/assets/d07743f3-d033-450f-990c-80d5e0c423c8
 ## Installation
 
 ### From Chrome Web Store
-*(Coming soon)*
+
+[https://chromewebstore.google.com/detail/ai-browser-assistant/iaknpppnnijhjnglammebnaclcklkgcj](https://chromewebstore.google.com/detail/ai-browser-assistant/iaknpppnnijhjnglammebnaclcklkgcj)
 
 ### Manual Install (Developer Mode)
 
@@ -50,8 +51,9 @@ https://github.com/user-attachments/assets/d07743f3-d033-450f-990c-80d5e0c423c8
 Open any webpage, then type your task in the chat box:
 
 ```
-Open GitHub user sazima's profile page and star one of their repos
-Check the weather in Singapore
+1. Open GitHub user sazima's profile page and star one of their repos
+2. Check the weather in Singapore
+3. Go to YouTube, open a GitHub tutorial, and like it. Then check the weather in Singapore. After that, open the test repository of GitHub user sazima, and create an issue urging for an update. Note: 1. In the issue, attach the tutorial link from earlier and the local weather in Singapore. 2. At the beginning of the issue, mention that this issue was created by an AI plugin, and the plugin's repository is https://github.com/sazima/ai-browser-extension
 ```
 
 The AI will show each step it's taking in real time. Click **■** to stop at any time.
