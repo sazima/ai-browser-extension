@@ -124,36 +124,82 @@ function flashElement(el, color = "#f59e0b") {
 // ── 工具函数 ──────────────────────────────────────────────────
 
 /**
- * 判断元素是否可见
- * 优先用 checkVisibility()（Chrome 105+），避免 getComputedStyle + getBoundingClientRect
- * 批量调用时触发的强制 layout reflow 是 readPage 卡顿的主要原因
+ * 返回元素的第一个可见 ClientRect，null 表示不可见。
+ * 参考 Vimium 的 getVisibleClientRect：
+ *  - getClientRects() 对行内多段元素比 getBoundingClientRect 更精确
+ *  - 过滤 < 3px 的极微小元素（Vimium 阈值）
+ *  - computed visibility 检查（继承链，display:none 的后代 getClientRects 返回空）
+ */
+function getVisibleRect(el) {
+  if (!el) return null;
+  const rects = el.getClientRects();
+  if (!rects.length) return null;
+  let style = null; // 懒加载，只在有候选 rect 时才调用 getComputedStyle
+  for (const r of rects) {
+    if (r.width < 3 || r.height < 3) continue;
+    if (!style) style = window.getComputedStyle(el);
+    if (style.visibility !== "visible") return null; // 继承链隐藏，所有 rect 均无效
+    return r;
+  }
+  return null;
+}
+
+/**
+ * 判断元素是否可见（不含视口位置判断）
  */
 function isVisible(el) {
-  if (!el) return false;
-  // checkVisibility 是浏览器原生实现，不触发 JS 侧 reflow，比手动检查快 10x 以上
-  if (typeof el.checkVisibility === "function") {
-    return el.checkVisibility({ visibilityProperty: true, opacityProperty: true });
-  }
-  // 降级：offsetParent 为 null 表示 display:none（不含 fixed 元素）
-  if (el.offsetWidth === 0 && el.offsetHeight === 0) return false;
-  return true;
+  return getVisibleRect(el) !== null;
+}
+
+/**
+ * 穿透 Shadow DOM 的 elementFromPoint（参考 Vimium）
+ * 返回坐标 (x,y) 处最顶层的实际元素，可穿越多层 shadow root
+ */
+function getElementFromPoint(x, y, root, visited) {
+  if (!root) root = document;
+  if (!visited) visited = new Set();
+  const el = root.elementsFromPoint ? root.elementsFromPoint(x, y)[0] : root.elementFromPoint(x, y);
+  if (!el || visited.has(el)) return el;
+  visited.add(el);
+  if (el.shadowRoot) return getElementFromPoint(x, y, el.shadowRoot, visited) || el;
+  return el;
 }
 
 /**
  * 获取元素的描述文字
  */
+/**
+ * 获取元素的描述文字
+ */
 function getElementText(el) {
-  return (
-    el.innerText?.trim() ||
-    (typeof el.value === "string" ? el.value.trim() : "") ||
-    el.placeholder?.trim() ||
-    el.getAttribute("aria-label")?.trim() ||
-    el.getAttribute("title")?.trim() ||
-    el.getAttribute("name")?.trim() ||
-    el.getAttribute("alt")?.trim() ||
-    el.getAttribute("data-testid")?.trim() ||
-    ""
-  ).slice(0, 120);
+  let text = (
+      el.innerText?.trim() ||
+      (typeof el.value === "string" ? el.value.trim() : "") ||
+      el.placeholder?.trim() ||
+      el.getAttribute("aria-label")?.trim() ||
+      el.getAttribute("title")?.trim() ||
+      el.getAttribute("name")?.trim() ||
+      el.getAttribute("alt")?.trim() ||
+      el.getAttribute("data-testid")?.trim() ||
+      ""
+  );
+
+  // 【新增核心逻辑】：针对代码 Diff 行、表格行中极短文本的元素（如行号、小图标），补充行级上下文
+  if (text.length < 15 && !["INPUT", "SELECT", "TEXTAREA"].includes(el.tagName)) {
+    // 寻找最近的行级容器（匹配 table row、列表项或常见的代码行 class）
+    const row = el.closest("tr, li, [class*='row'], [class*='line']");
+    if (row && row !== el) {
+      // 提取整行文本，去除多余换行和空格
+      const rowText = (row.innerText || "").replace(/\s+/g, " ").trim();
+      // 如果整行文本有实质内容，将代码/行文本追加到该行号的描述中
+      if (rowText && rowText.length > text.length) {
+        text = text ? `${text} | ${rowText}` : rowText;
+      }
+    }
+  }
+
+  // 截断超长文本，防止单元素占用 Token 过多
+  return text.slice(0, 150);
 }
 
 /**
@@ -255,7 +301,7 @@ function detectPopupsWithCounter(startId) {
   return {
     detected: true,
     count: popups.length,
-    buttons: popupButtons.slice(0, 10),
+    buttons: popupButtons,
   };
 }
 
@@ -273,22 +319,41 @@ function readPage() {
   let counter = 1;
 
   // 收集所有可交互元素
+  // 参考 Vimium：原生元素 + ARIA role + 事件属性 + tabindex + 框架特有属性
   const selectors = [
+    // 原生语义元素
     "a[href]",
     "button",
     'input:not([type="hidden"])',
     "textarea",
     "select",
+    "label",
+    "details",
+    // ARIA 角色（Vimium 完整列表）
     '[role="button"]',
     '[role="link"]',
     '[role="menuitem"]',
+    '[role="menuitemcheckbox"]',
+    '[role="menuitemradio"]',
     '[role="tab"]',
     '[role="checkbox"]',
+    '[role="radio"]',
     '[role="option"]',
     '[role="textbox"]',
     '[role="combobox"]',
+    '[role="searchbox"]',
+    '[role="spinbutton"]',
+    '[role="switch"]',
+    '[role="slider"]',
+    // 内联编辑
     '[contenteditable="true"]',
+    // 事件属性（原生 onclick / Angular / Google jsaction）
     "[onclick]",
+    "[ng-click]",
+    "[data-ng-click]",
+    "[jsaction]",
+    // 可键盘聚焦的自定义元素（tabindex >= 0，排除 -1 仅程序聚焦）
+    '[tabindex]:not([tabindex="-1"])',
   ].join(",");
 
   // 分两类收集：语义导航区元素 优先，其余普通元素次之
@@ -296,7 +361,7 @@ function readPage() {
   const otherElements = [];
 
   // ── 优先扫描富文本编辑器（TinyMCE iframe + ProseMirror/Quill contenteditable）──
-  // 这类编辑器在复杂表单页面中往往排在 120 个名额之后被截断，提前加入 otherElements 保证可见
+  // 这类编辑器在复杂表单页面中往往夹在大量普通元素之间，提前加入 otherElements 保证可见
   function getRichEditorLabel(el) {
     const parent = el.closest('[class*="field"], [class*="editor"], [class*="form"], .control, .field-group, td, li, .description');
     if (!parent) return "";
@@ -325,7 +390,7 @@ function readPage() {
   } catch { /* 忽略 */ }
 
   // 2. ProseMirror / Quill / Atlassian Editor（contenteditable div）
-  // 普通 [contenteditable="true"] 已在主选择器里，但会被 600 cap 或 120 返回 cap 截断
+  // 普通 [contenteditable="true"] 已在主选择器里，但在大型页面中可能排在列表靠后
   // 这里单独扫描「外层编辑区容器」并优先加入列表
   try {
     const ceSelectors = [
@@ -434,15 +499,39 @@ function readPage() {
   const rawList = Array.from(document.querySelectorAll(selectors));
   perf(`querySelectorAll done (${rawList.length} raw elements, modal=${!!activeModal})`);
 
+  // 整体扫描超时（ms）：防止在超大页面（GitLab MR / 长 diff）上阻塞主线程
+  // 超时后停止继续扫描，返回已收集的部分结果，并附 timed_out:true
+  const SCAN_TIMEOUT_MS = 6000;
+  let timedOut = false;
+
   // 只对表单控件调用 getFieldLabel（含 cloneNode，开销大）
   const FORM_TAGS = new Set(["input", "textarea", "select"]);
   // 预扫描已加入的元素集合，避免重复
   const preScannedSet = new Set(otherElements.map((e) => e.el));
 
   for (const el of rawList) {
+    if (performance.now() - t0 > SCAN_TIMEOUT_MS) { timedOut = true; break; }
     if (preScannedSet.has(el)) continue; // 富文本编辑器已优先加入，跳过
-    if (!isVisible(el)) continue;
-    if (!isInViewport(el)) continue;    // 视口过滤（模态框内元素豁免）
+
+    // Vimium 式可见性：getClientRects + 3px + computed visibility
+    const visRect = getVisibleRect(el);
+    if (!visRect) continue;
+
+    // 视口过滤（模态框 / 滚动容器内元素豁免）
+    if (!isInViewport(el)) continue;
+
+    // Vimium 式遮挡过滤：中心点处最顶层元素必须是该元素本身或其父/子
+    // 仅对视口内普通元素做检测，避免误删模态框/滚动容器内被裁剪的元素
+    const isExempt = (activeModal && activeModal.contains(el)) ||
+                     scrollContainers.some((sc) => sc.contains(el));
+    if (!isExempt) {
+      try {
+        const cx = visRect.left + visRect.width * 0.5;
+        const cy = visRect.top + visRect.height * 0.5;
+        const top = getElementFromPoint(cx, cy);
+        if (top && !el.contains(top) && !top.contains(el)) continue; // 被其他元素完全遮挡
+      } catch { /* 忽略，宁可误报也不漏报 */ }
+    }
 
     const text = getElementText(el);
     const tag = el.tagName.toLowerCase();
@@ -455,11 +544,26 @@ function readPage() {
       try { label = getFieldLabel(el); } catch { /* 忽略 */ }
     }
 
+    // tabindex 元素无文本时跳过（避免大量空 div 进入列表）
+    if (!text && el.getAttribute("tabindex") !== null && tag === "div") continue;
+
     const info = {
       tag, type,
       text: text || `(${tag})`,
       href: href ? href.slice(0, 80) : "",
       ...(label ? { label } : {}),
+      ...(tag === "select" ? {
+        options: Array.from(el.options).filter((o) => o.value !== "").map((o) => String(o.text).trim()),
+      } : {}),
+      // combobox textarea：暴露关联隐藏 select 的选项，让 AI 知道可选值
+      ...(tag === "textarea" && el.getAttribute("role") === "combobox" ? (() => {
+        const sid = (el.id || "").replace(/-textarea$/, "");
+        const sel = sid ? document.getElementById(sid) : null;
+        if (sel && sel.tagName === "SELECT") {
+          return { options: Array.from(sel.options).filter((o) => o.value !== "").map((o) => String(o.text).trim()) };
+        }
+        return {};
+      })() : {}),
     };
 
     const inNav = el.closest('nav, [role="navigation"], header');
@@ -495,24 +599,22 @@ function readPage() {
       suppElements.push({ el, info: {
         tag: el.tagName.toLowerCase(), type: "", text: text.slice(0, 120), href: "",
       }});
-      if (suppElements.length >= 80) break;
     }
-    if (suppElements.length >= 80) break;
   }
 
   // 第二步：常规 cursor:pointer 扫描（处理 Vue/React JS 绑定事件的普通可点击元素）
+  // 注意：getComputedStyle 开销极大，大型页面（GitLab diff 等）可能有数万个节点
+  // 用 timedOut 检查 + 节点数上限双重保护，避免长时间阻塞主线程
   const capturedSetFull = new Set([...rawList, ...suppElements.map((e) => e.el)]);
-  const suppNodeList = document.querySelectorAll("span, div, li, td, p");
-  let suppChecked = 0;
+  const suppNodeList = timedOut ? [] : document.querySelectorAll("span, div, li, td, p");
   for (const el of suppNodeList) {
-    if (suppChecked >= 400) break;
+    if (performance.now() - t0 > SCAN_TIMEOUT_MS) { timedOut = true; break; }
     if (capturedSetFull.has(el)) continue;
     if (!isVisible(el)) continue;
     if (!isInViewport(el)) continue;
     const text = el.innerText?.trim() || "";
     const firstLine = text.split("\n")[0].trim();
     if (firstLine.length > 80) continue;
-    suppChecked++;
     if (window.getComputedStyle(el).cursor === "pointer") {
       const displayText = firstLine
         || el.getAttribute("data-placeholder")?.trim()
@@ -522,15 +624,49 @@ function readPage() {
       suppElements.push({ el, info: {
         tag: el.tagName.toLowerCase(), type: "", text: displayText.slice(0, 120), href: "",
       }});
-      if (suppElements.length >= 100) break;
     }
   }
-  perf(`supp scan done (float=${floatContainers.length} checked=${suppChecked} found=${suppElements.length})`);
+  perf(`supp scan done (float=${floatContainers.length} found=${suppElements.length})`);
 
-  // 先放导航区元素，再放其他元素，最后放补充元素
+  // ── Shadow DOM 穿透扫描：Web Component（如 bili-comments）内部的可交互元素 ──
+  // document.querySelectorAll 无法穿透 shadow root，需手动遍历所有 open shadowRoot
+  const shadowElements = [];
+  try {
+    const shadowSelectors = [
+      "a[href]", "button", 'input:not([type="hidden"])', "textarea", "select",
+      '[role="button"]', '[role="textbox"]', '[role="combobox"]', '[contenteditable="true"]',
+    ].join(",");
+    const capturedAll = new Set([...rawList, ...suppElements.map((e) => e.el)]);
+
+    function collectFromShadow(root, depth) {
+      if (depth > 6) return;
+      for (const el of root.querySelectorAll("*")) {
+        if (el.shadowRoot) {
+          try {
+            for (const inner of el.shadowRoot.querySelectorAll(shadowSelectors)) {
+              if (capturedAll.has(inner)) continue;
+              if (!isVisible(inner)) continue;
+              capturedAll.add(inner);
+              const tag = inner.tagName.toLowerCase();
+              const text = getElementText(inner) || `(${tag})`;
+              shadowElements.push({ el: inner, info: {
+                tag, type: inner.getAttribute("type") || "",
+                text: text.slice(0, 120), href: inner.href || "",
+              }});
+            }
+          } catch { /* 跨域 shadow root 跳过 */ }
+          try { collectFromShadow(el.shadowRoot, depth + 1); } catch { /* 忽略 */ }
+        }
+      }
+    }
+    if (!timedOut) collectFromShadow(document, 0);
+  } catch { /* 忽略 shadow DOM 错误 */ }
+  perf(`shadow scan done (found=${shadowElements.length} timedOut=${timedOut})`);
+
+  // 先放导航区元素，再放其他元素，最后放补充元素，最后是 shadow DOM 元素
   const allEntries = []; // { el, id, info }
   const elements = [];
-  for (const { el, info } of [...navElements, ...otherElements, ...suppElements]) {
+  for (const { el, info } of [...navElements, ...otherElements, ...suppElements, ...shadowElements]) {
     info.id = counter;
     elementMap.set(counter, el);
     el.setAttribute("data-ai-id", counter);
@@ -559,7 +695,7 @@ function readPage() {
     .slice(0, 8000);
   perf("bodyText done");
 
-  perf(`TOTAL elements=${elements.length} modal=${!!activeModal}`);
+  perf(`TOTAL elements=${elements.length} modal=${!!activeModal} timedOut=${timedOut}`);
   return {
     url: window.location.href,
     title: document.title,
@@ -567,6 +703,7 @@ function readPage() {
     interactive_elements: elements,
     total_elements: elements.length,
     active_modal: activeModal ? true : false,
+    ...(timedOut ? { timed_out: true, warning: "页面元素过多，扫描已在 6s 后截断，当前屏幕内元素仍完整收录" } : {}),
   };
 }
 
@@ -588,27 +725,28 @@ function clickElement(id) {
     const cx = Math.round(rect2.left + rect2.width / 2);
     const cy = Math.round(rect2.top  + rect2.height / 2);
 
-    // 派发完整的鼠标/指针事件序列，确保各类框架（Vue/React/原生）都能响应
-    // 部分组件（如 BlueKing bk-select）只监听 mousedown，不监听 click
-    const base = { bubbles: true, cancelable: true, composed: true, clientX: cx, clientY: cy };
+    // 参考 Vimium simulateClick：加 view/detail 让框架识别为真实用户操作
+    // 事件顺序与 Vimium 一致：pointerover → mouseover → pointerdown → mousedown → pointerup → mouseup → click
+    const base = { bubbles: true, cancelable: true, composed: true, view: window, detail: 1, clientX: cx, clientY: cy };
+    const pbase = { ...base, pointerId: 1, isPrimary: true };
 
-    // 模拟鼠标从元素左上角移动到中心的轨迹（3步），让依赖 mousemove 的组件正确响应
+    // 模拟鼠标移动轨迹（让依赖 mousemove 的组件正确响应）
     const startX = Math.round(rect2.left + 2);
     const startY = Math.round(rect2.top  + 2);
     for (let i = 1; i <= 3; i++) {
       const mx = Math.round(startX + (cx - startX) * i / 3);
       const my = Math.round(startY + (cy - startY) * i / 3);
-      el.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, cancelable: true, composed: true, clientX: mx, clientY: my }));
+      el.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, cancelable: true, composed: true, view: window, clientX: mx, clientY: my }));
     }
 
-    el.dispatchEvent(new MouseEvent("mouseover",    { ...base }));
-    el.dispatchEvent(new MouseEvent("mouseenter",   { ...base, bubbles: false }));
-    el.dispatchEvent(new PointerEvent("pointerover",  { ...base, pointerId: 1 }));
-    el.dispatchEvent(new PointerEvent("pointerdown",  { ...base, pointerId: 1 }));
-    el.dispatchEvent(new MouseEvent("mousedown",    { ...base }));
-    el.dispatchEvent(new PointerEvent("pointerup",    { ...base, pointerId: 1 }));
-    el.dispatchEvent(new MouseEvent("mouseup",      { ...base }));
-    el.dispatchEvent(new MouseEvent("click",        { ...base }));
+    el.dispatchEvent(new PointerEvent("pointerover",  { ...pbase }));
+    el.dispatchEvent(new MouseEvent("mouseover",      { ...base }));
+    el.dispatchEvent(new MouseEvent("mouseenter",     { ...base, bubbles: false }));
+    el.dispatchEvent(new PointerEvent("pointerdown",  { ...pbase }));
+    el.dispatchEvent(new MouseEvent("mousedown",      { ...base }));
+    el.dispatchEvent(new PointerEvent("pointerup",    { ...pbase }));
+    el.dispatchEvent(new MouseEvent("mouseup",        { ...base }));
+    el.dispatchEvent(new MouseEvent("click",          { ...base }));
 
     // 橙色闪烁：区别于 read_page 时的蓝色标注，让用户清楚看到点了哪里
     flashElement(el, "#f59e0b");
@@ -635,13 +773,15 @@ function typeText(id, text, clearFirst = true) {
     const r2 = el.getBoundingClientRect();
     const cx2 = Math.round(r2.left + r2.width / 2);
     const cy2 = Math.round(r2.top  + r2.height / 2);
-    const base2 = { bubbles: true, cancelable: true, composed: true, clientX: cx2, clientY: cy2 };
-    el.dispatchEvent(new MouseEvent("mouseover",   { ...base2 }));
-    el.dispatchEvent(new PointerEvent("pointerdown", { ...base2, pointerId: 1 }));
-    el.dispatchEvent(new MouseEvent("mousedown",   { ...base2 }));
-    el.dispatchEvent(new PointerEvent("pointerup",   { ...base2, pointerId: 1 }));
-    el.dispatchEvent(new MouseEvent("mouseup",     { ...base2 }));
-    el.dispatchEvent(new MouseEvent("click",       { ...base2 }));
+    const base2 = { bubbles: true, cancelable: true, composed: true, view: window, detail: 1, clientX: cx2, clientY: cy2 };
+    const pbase2 = { ...base2, pointerId: 1, isPrimary: true };
+    el.dispatchEvent(new PointerEvent("pointerover",  { ...pbase2 }));
+    el.dispatchEvent(new MouseEvent("mouseover",      { ...base2 }));
+    el.dispatchEvent(new PointerEvent("pointerdown",  { ...pbase2 }));
+    el.dispatchEvent(new MouseEvent("mousedown",      { ...base2 }));
+    el.dispatchEvent(new PointerEvent("pointerup",    { ...pbase2 }));
+    el.dispatchEvent(new MouseEvent("mouseup",        { ...base2 }));
+    el.dispatchEvent(new MouseEvent("click",          { ...base2 }));
 
     // 点击后检查焦点是否转移到了新元素（如弹框里的搜索框）
     // 若焦点已落在另一个可输入元素上，优先对该元素输入，而非原始元素
@@ -654,6 +794,62 @@ function typeText(id, text, clearFirst = true) {
       : el;
 
     target.focus();
+
+    // ── Jira / AUI combobox textarea（role="combobox" + 关联隐藏 select）──
+    // 这类组件不能靠 AJAX 候选列表，直接操作隐藏 select 并通知 Jira 更新 UI
+    if (target.tagName === "TEXTAREA" && target.getAttribute("role") === "combobox") {
+      // 尝试找关联的隐藏 select（命名规律：textarea id 去掉 "-textarea" 后缀）
+      const textareaId = target.id || "";
+      const selectId = textareaId.replace(/-textarea$/, "");
+      const hiddenSelect = selectId ? document.getElementById(selectId) : null;
+
+      if (hiddenSelect && hiddenSelect.tagName === "SELECT") {
+        const opts = Array.from(hiddenSelect.options).filter((o) => o.value !== "");
+        const norm = (s) => String(s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+        const needle = norm(text);
+        const match =
+          opts.find((o) => norm(o.text) === needle) ||
+          opts.find((o) => norm(o.text).includes(needle)) ||
+          opts.find((o) => needle.includes(norm(o.text)));
+        if (!match) {
+          const available = opts.map((o) => String(o.text).trim());
+          return { success: false, error: `combobox 关联 select 中没有匹配"${text}"的选项`, options: available };
+        }
+        // 删除 Jira 动态注入的 free-input option（value 是文字字符串而非数值 ID）
+        // 若保留，提交时会用 free-input 的文字 value，导致"ID 不存在"报错
+        hiddenSelect.querySelectorAll("option.free-input").forEach((o) => o.remove());
+        // 选中对应 option（multi-select 用 option.selected = true）
+        match.selected = true;
+        hiddenSelect.dispatchEvent(new Event("input",  { bubbles: true }));
+        hiddenSelect.dispatchEvent(new Event("change", { bubbles: true }));
+        // 清空 textarea，避免 data-submit-input-val="true" 把文字当 ID 提交
+        target.value = "";
+        target.dispatchEvent(new Event("input", { bubbles: true }));
+        flashElement(target, "#10b981");
+        return { success: true, message: `已在 combobox 中选择：${String(match.text).trim()}` };
+      }
+      // 找不到关联 select，继续走普通 textarea 输入流程
+    }
+
+    // ── 原生 <select>：直接设置 value + 触发 change ──────────────
+    if (target.tagName === "SELECT") {
+      const opts = Array.from(target.options).filter((o) => o.value !== "");
+      const norm = (s) => String(s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+      const needle = norm(text);
+      const match =
+        opts.find((o) => norm(o.text) === needle) ||
+        opts.find((o) => norm(o.text).includes(needle)) ||
+        opts.find((o) => needle.includes(norm(o.text)));
+      if (!match) {
+        const available = opts.map((o) => String(o.text).trim());
+        return { success: false, error: `select 中没有匹配"${text}"的选项`, options: available };
+      }
+      target.value = match.value;
+      target.dispatchEvent(new Event("input",  { bubbles: true }));
+      target.dispatchEvent(new Event("change", { bubbles: true }));
+      flashElement(target, "#10b981");
+      return { success: true, message: `已选择 select 选项：${String(match.text).trim()}` };
+    }
 
     const isContentEditable = target.isContentEditable;
     const isRichEditorIframe = el.tagName.toLowerCase() === "iframe";
@@ -769,14 +965,43 @@ function fillForm(fields) {
       const tag = el.tagName.toLowerCase();
       const type = (el.getAttribute("type") || "").toLowerCase();
 
+      const norm = (s) => String(s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+      const needle = norm(value);
+
       if (tag === "select") {
-        // <select> 下拉：用 value 匹配，找不到则按文本匹配
-        const strVal = String(value);
+        // 修复1：原生 select 增强模糊匹配并补充 input 事件（解决“研发需求类型”问题）
         const opt = Array.from(el.options).find(
-          (o) => o.value === strVal || o.text === strVal
+            (o) => o.value === String(value) || norm(o.text) === needle || norm(o.text).includes(needle)
         );
-        if (opt) el.value = opt.value;
-        el.dispatchEvent(new Event("change", { bubbles: true }));
+        if (opt) {
+          el.value = opt.value;
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+        } else {
+          throw new Error(`下拉框中没有匹配 "${value}" 的选项`);
+        }
+      } else if (tag === "textarea" && el.getAttribute("role") === "combobox") {
+        // 修复2：单独处理 Jira/AUI Combobox 的隐藏 select（解决“模块/修复版本”问题）
+        const selectId = (el.id || "").replace(/-textarea$/, "");
+        const hiddenSelect = selectId ? document.getElementById(selectId) : null;
+        if (hiddenSelect && hiddenSelect.tagName === "SELECT") {
+          const opt = Array.from(hiddenSelect.options).find(
+              (o) => o.value === String(value) || norm(o.text) === needle || norm(o.text).includes(needle)
+          );
+          if (opt) {
+            // 清除 Jira 动态注入的残留伪造 option，防止提交报错
+            hiddenSelect.querySelectorAll("option.free-input").forEach((o) => o.remove());
+            opt.selected = true;
+            hiddenSelect.dispatchEvent(new Event("input", { bubbles: true }));
+            hiddenSelect.dispatchEvent(new Event("change", { bubbles: true }));
+            // 清空 textarea，防止文本覆盖已选的 ID
+            el.value = "";
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+          } else {
+            throw new Error(`隐藏下拉框中没有匹配 "${value}" 的选项`);
+          }
+        }
+
       } else if (type === "checkbox" || type === "radio") {
         // checkbox/radio：按布尔值设置 checked 状态
         const checked = value === true || value === 1 || value === "true" || value === "1";
@@ -863,29 +1088,41 @@ function hoverElement(id) {
     // GitLab / GitHub 等平台的"添加评论"按钮通过 CSS tr:hover .btn { display:block }
     // 实现，JS 事件无法触发该状态，因此手动把隐藏按钮显示出来。
     //
-    // 通用方案：沿 DOM 向上走，找"高度仍在行级范围内"的最大祖先容器。
-    // 阈值 = max(元素自身高度 × 5, 100px)。
-    // 超过此高度说明已经是区块/面板级容器，停止，不继续向上。
-    // 这样无需硬编码任何标签名或 class，适用于任何页面结构。
-    const ROW_MAX_H = Math.max(rect.height * 5, 100);
-    let container = el.parentElement;
-    let probe = el.parentElement;
-    while (probe && probe !== document.body) {
-      const r = probe.getBoundingClientRect();
-      if (r.height > 0 && r.height > ROW_MAX_H) break; // 容器太高，停止向上
-      if (r.height > 0) container = probe;              // 仍在行级范围，记录为候选
-      probe = probe.parentElement;
+    // 容器策略：
+    // 1. 优先取最近的 <tr> 祖先（表格型 diff 布局，如 GitLab/GitHub）
+    //    精确限定到"当前行"，避免 <tbody> 跨多行、reveal 出错行的 + 按钮
+    // 2. 降级：沿 DOM 向上找高度 ≤ max(height×5, 100px) 的最大祖先（非表格布局通用）
+    let container = el.closest("tr") || null;
+    if (!container) {
+      const ROW_MAX_H = Math.max(rect.height * 5, 100);
+      container = el.parentElement;
+      let probe = el.parentElement;
+      while (probe && probe !== document.body) {
+        const r = probe.getBoundingClientRect();
+        if (r.height > 0 && r.height > ROW_MAX_H) break; // 容器太高，停止向上
+        if (r.height > 0) container = probe;              // 仍在行级范围，记录为候选
+        probe = probe.parentElement;
+      }
     }
     // 尝试从容器内提取"行号"信息，用于标注 reveal 出来的按钮，让 AI 知道操作的是哪一行
-    // 策略：找容器内第一个纯数字文本节点（行号格式），与任何具体框架无关
+    // 优先：data-linenumber 属性（GitLab/GitHub diff 行专用）
+    //   - 一行含 old/new 两个 data-linenumber 时，取最大值 = new-side 行号
+    //   - 避免 TreeWalker 在 DOM 顺序上先遇到 old-side 小行号而产生误标
+    // 降级：扫描纯数字文本节点（其他平台通用兜底）
     let lineLabel = "";
     if (container) {
-      // 遍历容器内所有文本节点/元素，找纯数字（行号）
-      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-      let node;
-      while ((node = walker.nextNode())) {
-        const t = node.textContent.trim();
-        if (/^\d+$/.test(t) && parseInt(t) < 100000) { lineLabel = `line ${t}`; break; }
+      const lineNums = Array.from(container.querySelectorAll("[data-linenumber]"))
+        .map((e) => parseInt(e.getAttribute("data-linenumber")))
+        .filter((n) => n > 0 && n < 100000);
+      if (lineNums.length > 0) {
+        lineLabel = `line ${Math.max(...lineNums)}`;
+      } else {
+        const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode())) {
+          const t = node.textContent.trim();
+          if (/^\d+$/.test(t) && parseInt(t) < 100000) { lineLabel = `line ${t}`; break; }
+        }
       }
     }
 
@@ -1000,6 +1237,30 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       break;
     default:
       result = { success: false, error: `未知 action: ${action}` };
+  }
+
+  // ── 异步动作：call_api（利用当前 session cookie 发 fetch）──────
+  if (action === "call_api") {
+    const { url, method = "GET", body = null } = params || {};
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
+    const fetchOpts = {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": csrfToken,
+      },
+      credentials: "same-origin",
+    };
+    if (body && method !== "GET") fetchOpts.body = JSON.stringify(body);
+    fetch(url, fetchOpts)
+      .then(async (r) => {
+        const text = await r.text().catch(() => "");
+        let data;
+        try { data = JSON.parse(text); } catch { data = text; }
+        sendResponse({ success: r.ok, status: r.status, data });
+      })
+      .catch((e) => sendResponse({ success: false, error: e.message }));
+    return true;
   }
 
   sendResponse(result);
