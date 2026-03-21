@@ -5,7 +5,7 @@
 
 const TRANSLATIONS = {
   en: {
-    "app.title": "AI Browser Assistant",
+    "app.title": "Buddy AI",
     "settings.title": "Settings",
     "settings.apikey.label": "API Key",
     "settings.apikey.placeholder": "sk-xxxxxxxxxxxxxxxx",
@@ -20,7 +20,7 @@ const TRANSLATIONS = {
     "settings.maxturns.hint": "Max steps before auto-stop (default 60)",
     "settings.language.label": "Language",
     "settings.save": "Save",
-    "welcome.title": "Hello! I'm your AI Browser Assistant",
+    "welcome.title": "Hi! I'm Buddy AI",
     "welcome.desc": "I can automate any web task, for example:",
     "welcome.example1": "Open GitHub user sazima's profile page and Star one of their repos",
     "welcome.example2": "Check the weather in Singapore",
@@ -45,7 +45,7 @@ const TRANSLATIONS = {
   },
 
   "zh-CN": {
-    "app.title": "AI 浏览器助手",
+    "app.title": "Buddy AI",
     "settings.title": "设置",
     "settings.apikey.label": "API Key",
     "settings.apikey.placeholder": "sk-xxxxxxxxxxxxxxxx",
@@ -60,7 +60,7 @@ const TRANSLATIONS = {
     "settings.maxturns.hint": "AI 最多执行多少步后强制停止（默认 60）",
     "settings.language.label": "语言",
     "settings.save": "保存",
-    "welcome.title": "你好！我是 AI 浏览器助手",
+    "welcome.title": "你好！我是 Buddy AI",
     "welcome.desc": "我可以帮你自动完成任何网页操作，例如：",
     "welcome.example1": "帮我打开 GitHub 的 sazima 用户首页，并 Star 他的其中一个仓库",
     "welcome.example2": "帮我查询新加坡的天气",
@@ -100,7 +100,7 @@ const TRANSLATIONS = {
     "settings.maxturns.hint": "AI 最多執行幾步後強制停止（預設 60）",
     "settings.language.label": "語言",
     "settings.save": "儲存",
-    "welcome.title": "你好！我是 AI 瀏覽器助手",
+    "welcome.title": "你好！我是 Buddy AI",
     "welcome.desc": "我可以幫你自動完成任何網頁操作，例如：",
     "welcome.example1": "幫我打開 GitHub 的 sazima 用戶首頁，並 Star 他的其中一個倉庫",
     "welcome.example2": "幫我查詢新加坡的天氣",
@@ -140,7 +140,7 @@ const TRANSLATIONS = {
     "settings.maxturns.hint": "自動停止までの最大ステップ数（デフォルト 60）",
     "settings.language.label": "言語",
     "settings.save": "保存",
-    "welcome.title": "こんにちは！AIブラウザアシスタントです",
+    "welcome.title": "こんにちは！Buddy AI です",
     "welcome.desc": "あらゆるウェブ操作を自動化できます。例えば：",
     "welcome.example1": "GitHubのsazimaユーザーページを開いて、リポジトリの一つにStarをつける",
     "welcome.example2": "シンガポールの天気を調べる",
@@ -165,7 +165,7 @@ const TRANSLATIONS = {
   },
 
   ko: {
-    "app.title": "AI 브라우저 어시스턴트",
+    "app.title": "Buddy AI",
     "settings.title": "설정",
     "settings.apikey.label": "API Key",
     "settings.apikey.placeholder": "sk-xxxxxxxxxxxxxxxx",
@@ -180,7 +180,7 @@ const TRANSLATIONS = {
     "settings.maxturns.hint": "자동 중지 전 최대 단계 수 (기본값 60)",
     "settings.language.label": "언어",
     "settings.save": "저장",
-    "welcome.title": "안녕하세요! AI 브라우저 어시스턴트입니다",
+    "welcome.title": "안녕하세요! Buddy AI 입니다",
     "welcome.desc": "모든 웹 작업을 자동화할 수 있습니다. 예를 들어:",
     "welcome.example1": "GitHub의 sazima 사용자 페이지를 열고 저장소 중 하나에 Star 주기",
     "welcome.example2": "싱가포르 날씨 확인",
