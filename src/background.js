@@ -35,6 +35,7 @@ const BG_STRINGS = {
     step_wait: (s) => `⏳ Wait ${s}s`,
     step_url: "🔍 Get current URL",
     step_fill: (n) => `📝 Fill ${n} field(s)`,
+    step_api: (url) => `🔌 Call API: ${url}`,
     step_unknown: (name) => `🔧 Execute ${name}`,
     reply_lang: "Always reply to the user in English.",
   },
@@ -62,6 +63,7 @@ const BG_STRINGS = {
     step_wait: (s) => `⏳ 等待 ${s} 秒`,
     step_url: "🔍 获取当前 URL",
     step_fill: (n) => `📝 批量填写 ${n} 个字段`,
+    step_api: (url) => `🔌 调用 API: ${url}`,
     step_unknown: (name) => `🔧 执行 ${name}`,
     reply_lang: "始终用简体中文回复用户。",
   },
@@ -89,6 +91,7 @@ const BG_STRINGS = {
     step_wait: (s) => `⏳ 等待 ${s} 秒`,
     step_url: "🔍 取得目前 URL",
     step_fill: (n) => `📝 批次填寫 ${n} 個欄位`,
+    step_api: (url) => `🔌 呼叫 API: ${url}`,
     step_unknown: (name) => `🔧 執行 ${name}`,
     reply_lang: "始終用繁體中文回覆用戶。",
   },
@@ -116,6 +119,7 @@ const BG_STRINGS = {
     step_wait: (s) => `⏳ ${s}秒待機`,
     step_url: "🔍 現在のURLを取得",
     step_fill: (n) => `📝 ${n}個のフィールドを一括入力`,
+    step_api: (url) => `🔌 API呼び出し: ${url}`,
     step_unknown: (name) => `🔧 ${name}を実行`,
     reply_lang: "常に日本語でユーザーに返答してください。",
   },
@@ -143,6 +147,7 @@ const BG_STRINGS = {
     step_wait: (s) => `⏳ ${s}초 대기`,
     step_url: "🔍 현재 URL 가져오기",
     step_fill: (n) => `📝 ${n}개 필드 일괄 입력`,
+    step_api: (url) => `🔌 API 호출: ${url}`,
     step_unknown: (name) => `🔧 ${name} 실행`,
     reply_lang: "항상 한국어로 사용자에게 답변하세요.",
   },
@@ -184,17 +189,16 @@ const SYSTEM_PROMPTS = {
 - 使用前先 read_page 获取所有输入框的编号，然后一次 fill_form 搞定
 - 只有在填完后需要观察变化（如下拉联动）时，才逐个 type_text
 
-【输入后必须先观察，再决定下一步】：
-- type_text 在输入前会自动触发点击事件，部分搜索框（如 GitLab 全局搜索）点击后会弹出搜索面板
-- 每次 type_text 之后，必须先 read_page 观察页面发生了什么变化，再决定下一步操作
-- 不要在没有观察的情况下假设"输完就按 Enter"或"输完就点按钮"
-- 根据 read_page 结果决定：
-  · 新出现了弹框/搜索面板，其中有搜索框 → 用 type_text 在新出现的搜索框中输入，再 read_page
-  · 新出现了下拉/候选列表 → 从中 click_element 选择正确选项（不要按 Enter）
-  · 页面没变化且有搜索/查询按钮 → click_element 点那个按钮
+【输入框操作流程】：
+- 输入前先点击：type_text 前必须先 click_element 点击该输入框，再 read_page 观察：
+  · 弹出了搜索面板/弹框且其中有新输入框 → 在新出现的输入框中 type_text，而非原始输入框
+  · 出现了下拉/候选列表 → click_element 选择正确选项（不要继续输入）
+  · 无变化 → 直接 type_text 在原输入框中输入
+- type_text 完成后 read_page 观察，再决定下一步：
+  · 有搜索/查询/提交按钮 → click_element 点击该按钮（优先于按 Enter）
+  · 出现了下拉/候选列表 → click_element 选择正确选项（不要按 Enter）
+  · 无搜索按钮 → press_key("Enter") 提交
   · 还有其他必填字段未填 → 继续填写下一个字段
-  · 所有字段已填完且有提交按钮 → click_element 点击提交
-  · 只有一个搜索框且焦点在其中 → press_key("Enter") 提交
 - 永远不要跳过观察步骤直接假设行为
 
 探索规则：
@@ -246,17 +250,16 @@ const SYSTEM_PROMPTS = {
 - 使用前先 read_page 獲取所有輸入框的編號，然後一次 fill_form 搞定
 - 只有在填完後需要觀察變化（如下拉聯動）時，才逐個 type_text
 
-【輸入後必須先觀察，再決定下一步】：
-- type_text 在輸入前會自動觸發點擊事件，部分搜尋框（如 GitLab 全域搜尋）點擊後會彈出搜尋面板
-- 每次 type_text 之後，必須先 read_page 觀察頁面發生了什麼變化，再決定下一步操作
-- 不要在沒有觀察的情況下假設「輸完就按 Enter」或「輸完就點按鈕」
-- 根據 read_page 結果決定：
-  · 新出現了彈框/搜尋面板，其中有搜尋框 → 用 type_text 在新出現的搜尋框中輸入，再 read_page
-  · 新出現了下拉/候選清單 → 從中 click_element 選擇正確選項（不要按 Enter）
-  · 頁面沒變化且有搜尋/查詢按鈕 → click_element 點那個按鈕
+【輸入框操作流程】：
+- 輸入前先點擊：type_text 前必須先 click_element 點擊該輸入框，再 read_page 觀察：
+  · 彈出了搜尋面板/彈框且其中有新輸入框 → 在新出現的輸入框中 type_text，而非原始輸入框
+  · 出現了下拉/候選清單 → click_element 選擇正確選項（不要繼續輸入）
+  · 無變化 → 直接 type_text 在原輸入框中輸入
+- type_text 完成後 read_page 觀察，再決定下一步：
+  · 有搜尋/查詢/提交按鈕 → click_element 點擊該按鈕（優先於按 Enter）
+  · 出現了下拉/候選清單 → click_element 選擇正確選項（不要按 Enter）
+  · 無搜尋按鈕 → press_key("Enter") 提交
   · 還有其他必填欄位未填 → 繼續填寫下一個欄位
-  · 所有欄位已填完且有提交按鈕 → click_element 點擊提交
-  · 只有一個搜尋框且焦點在其中 → press_key("Enter") 提交
 - 永遠不要跳過觀察步驟直接假設行為
 
 探索規則：
@@ -308,17 +311,16 @@ Operation rules:
 - First call read_page to get all input field IDs, then complete everything with one fill_form call
 - Only use individual type_text calls when you need to observe changes after each input (e.g. cascading dropdowns)
 
-[Observe after input before deciding next step]:
-- type_text automatically triggers a click event before typing; some search fields (e.g. GitLab global search) open a search panel when clicked
-- After each type_text, always call read_page to observe what changed before deciding the next action
-- Do not assume "press Enter after typing" or "click the button after typing" without observing first
-- Based on the read_page result:
-  · A modal / search panel appeared with a search box inside → use type_text on the new search box, then read_page
+[Input field workflow]:
+- Before typing, always click first: click_element on the input field, then read_page to observe:
+  · A search panel / modal appeared with a new input box → type_text into the new input box, not the original
+  · A dropdown / suggestion list appeared → click_element to select the correct option (do not type)
+  · No change → type_text directly into the original input field
+- After type_text, read_page to observe, then decide next step:
+  · A search / query / submit button is visible → click_element on that button (preferred over pressing Enter)
   · A dropdown / suggestion list appeared → click_element to select the correct option (do not press Enter)
-  · Page unchanged and a search / query button exists → click_element on that button
+  · No search button → press_key("Enter") to submit
   · Other required fields are not yet filled → continue filling the next field
-  · All fields filled and a submit button exists → click_element to submit
-  · Only one search box and it has focus → press_key("Enter") to submit
 - Never skip the observation step and assume behavior
 
 Exploration rules:
@@ -370,17 +372,16 @@ Exploration rules:
 - 事前に read_page で全入力フィールドのIDを取得し、1回の fill_form で完了させる
 - 入力後に変化を観察する必要がある場合（例：連動ドロップダウン）のみ個別に type_text を使う
 
-【入力後は必ず観察してから次のステップを決定する】：
-- type_text は入力前にクリックイベントを自動送信する。一部の検索フィールド（GitLab のグローバル検索など）はクリックで検索パネルが開く
-- type_text の後は、必ず read_page でページの変化を確認してから次のアクションを決定する
-- 観察せずに「入力後Enterを押す」「入力後ボタンをクリックする」と仮定しないこと
-- read_page の結果に基づいて決定する：
-  · モーダル／検索パネルが開いて検索ボックスがある場合 → 新しい検索ボックスに type_text して read_page
+【入力フィールドの操作フロー】：
+- 入力前に必ずクリック：type_text の前に click_element で入力フィールドをクリックし、read_page で観察する：
+  · 検索パネル／モーダルが開いて新しい入力ボックスがある場合 → 元の入力フィールドではなく新しい入力ボックスに type_text
+  · ドロップダウン／候補リストが出現した場合 → click_element で正しいオプションを選択する（入力を続けない）
+  · 変化なし → 元の入力フィールドに直接 type_text
+- type_text 完了後に read_page で観察し、次のステップを決定する：
+  · 検索／照会／送信ボタンがある場合 → click_element でそのボタンをクリック（Enterより優先）
   · ドロップダウン／候補リストが出現した場合 → click_element で正しいオプションを選択する（Enterは押さない）
-  · ページが変化せず検索／照会ボタンがある場合 → click_element でそのボタンをクリックする
+  · 検索ボタンがない場合 → press_key("Enter") で送信する
   · 他の必須フィールドが未入力の場合 → 次のフィールドの入力を続ける
-  · 全フィールド入力済みで送信ボタンがある場合 → click_element で送信する
-  · 検索ボックスが1つだけでフォーカスがある場合 → press_key("Enter") で送信する
 - 観察ステップを飛ばして動作を仮定しないこと
 
 探索ルール：
@@ -432,17 +433,16 @@ Exploration rules:
 - 먼저 read_page로 모든 입력 필드 ID를 가져온 후 한 번의 fill_form으로 완료한다
 - 입력 후 변화를 관찰해야 하는 경우（예: 연동 드롭다운）에만 개별 type_text를 사용한다
 
-【입력 후 반드시 관찰하고 나서 다음 단계를 결정한다】：
-- type_text는 입력 전에 클릭 이벤트를 자동으로 전송한다. 일부 검색 필드（GitLab 전역 검색 등）는 클릭 시 검색 패널이 열린다
-- type_text 후에는 반드시 read_page로 페이지 변화를 확인한 후 다음 액션을 결정한다
-- 관찰 없이 「입력 후 Enter 키를 누른다」 「입력 후 버튼을 클릭한다」고 가정하지 않는다
-- read_page 결과에 따라 결정한다：
-  · 모달 / 검색 패널이 열리고 검색 상자가 있는 경우 → 새 검색 상자에 type_text 후 read_page
+【입력 필드 조작 흐름】：
+- 입력 전에 반드시 클릭：type_text 전에 click_element로 입력 필드를 클릭하고 read_page로 관찰한다：
+  · 검색 패널 / 모달이 열리고 새 입력 상자가 있는 경우 → 원래 입력 필드가 아닌 새 입력 상자에 type_text
+  · 드롭다운 / 후보 목록이 나타난 경우 → click_element로 올바른 옵션을 선택한다（입력을 계속하지 않는다）
+  · 변화 없음 → 원래 입력 필드에 직접 type_text
+- type_text 완료 후 read_page로 관찰하고 다음 단계를 결정한다：
+  · 검색 / 조회 / 제출 버튼이 있는 경우 → click_element로 그 버튼을 클릭한다（Enter보다 우선）
   · 드롭다운 / 후보 목록이 나타난 경우 → click_element로 올바른 옵션을 선택한다（Enter 키를 누르지 않는다）
-  · 페이지가 변화하지 않고 검색 / 조회 버튼이 있는 경우 → click_element로 그 버튼을 클릭한다
+  · 검색 버튼이 없는 경우 → press_key("Enter")로 제출한다
   · 다른 필수 필드가 아직 입력되지 않은 경우 → 다음 필드 입력을 계속한다
-  · 모든 필드 입력 완료 및 제출 버튼이 있는 경우 → click_element로 제출한다
-  · 검색 상자가 하나이고 포커스가 있는 경우 → press_key("Enter")로 제출한다
 - 관찰 단계를 건너뛰고 동작을 가정하지 않는다
 
 탐색 규칙：
@@ -657,6 +657,25 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "call_api",
+      description:
+        "在当前页面的浏览器上下文中发起 fetch 请求，自动携带当前用户的 Session Cookie 和 CSRF Token，无需手动配置认证。" +
+        "适用场景：调用 GitLab / GitHub 等网站的 REST API（获取 MR diff、提交行内评论等），或调用当前页面所属网站的任意接口。" +
+        "注意：只能访问与当前页面同源（same-origin）的 URL。",
+      parameters: {
+        type: "object",
+        properties: {
+          url:    { type: "string",  description: "请求 URL（可用相对路径，如 /api/v4/projects/...）" },
+          method: { type: "string",  enum: ["GET", "POST", "PUT", "PATCH", "DELETE"], description: "HTTP 方法，默认 GET" },
+          body:   { type: "object",  description: "请求体（POST/PUT/PATCH 时使用，自动序列化为 JSON）" },
+        },
+        required: ["url"],
+      },
+    },
+  },
 ];
 
 // ── 辅助函数 ──────────────────────────────────────────────────
@@ -837,6 +856,15 @@ async function executeTool(toolName, params, tabId) {
       return JSON.stringify(result);
     }
 
+    case "call_api": {
+      const result = await executeInPage(tabId, "call_api", {
+        url: params.url,
+        method: params.method || "GET",
+        body: params.body || null,
+      });
+      return JSON.stringify(result);
+    }
+
     default:
       return JSON.stringify({ success: false, error: `未知工具: ${toolName}` });
   }
@@ -917,12 +945,27 @@ async function runAgentLoop(userMessage, tabId, apiKey, baseUrl, model, maxTurns
 
     // ── Context 压缩：保留最近 2 次 read_page 的完整内容，更早的替换为摘要 ──
     // 防止 context 无限增长导致 LLM 越来越慢（read_page 每次约 +7k tokens）
+    // ── Context 压缩：动态决定保留最近 1 次或 2 次的完整内容 ──
+    // 防止 context 无限增长导致 LLM 越来越慢，同时避免超大页面撑爆 Token 限制
     {
       const readPageIndices = messages.reduce((acc, m, i) => {
         if (m._is_read_page) acc.push(i);
         return acc;
-      }, []);
-      const toSummarize = readPageIndices.slice(0, -2); // 保留最近 2 次，其余压缩
+      },[]);
+
+      // 动态判断保留次数：
+      // 如果最新一次读取的页面数据极大（字符串长度 > 80000，约合 2万+ Tokens）
+      // 则强行只保留 1 次，防止触发 128k Token 上限；否则保留正常的 2 次
+      let keepCount = 2;
+      if (readPageIndices.length > 0) {
+        const lastReadMsg = messages[readPageIndices[readPageIndices.length - 1]];
+        if (lastReadMsg && lastReadMsg.content && lastReadMsg.content.length > 80000) {
+          keepCount = 1;
+          console.log(`[CTX] 页面极庞大 (约 ${Math.round(lastReadMsg.content.length/1000)}k 字符)，启动防爆破机制：仅保留最新 1 次快照`);
+        }
+      }
+
+      const toSummarize = readPageIndices.slice(0, -keepCount);
       for (const idx of toSummarize) {
         const msg = messages[idx];
         if (msg._summarized) continue; // 已压缩过，跳过
@@ -939,7 +982,7 @@ async function runAgentLoop(userMessage, tabId, apiKey, baseUrl, model, maxTurns
         } catch { /* JSON 解析失败则保持原样 */ }
       }
       if (toSummarize.length > 0) {
-        console.log(`[CTX] 压缩了 ${toSummarize.length} 条旧 read_page 结果`);
+        console.log(`[CTX] 压缩了 ${toSummarize.length} 条旧 read_page 结果，当前保留 ${keepCount} 条`);
       }
     }
 
@@ -1202,6 +1245,7 @@ function formatStepLabel(toolName, params, s) {
     wait: s.step_wait(params.seconds),
     get_current_url: s.step_url,
     fill_form: s.step_fill(params.fields?.length ?? 0),
+    call_api: s.step_api(params.url),
   };
   return labels[toolName] || s.step_unknown(toolName);
 }

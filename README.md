@@ -1,8 +1,8 @@
-# AI Browser Assistant
+# Buddy AI - AI Browser Agent: Automate Multi-Step Tasks with Natural Language
 
 A Chrome extension that automates browser tasks using AI. Just describe what you want to do in natural language — the AI controls the browser and gets it done.
 
-English | [简体中文](./README.zh-CN.md) | [日本語](./README.ja.md) | [한국어](./README.ko.md)
+English | [简体中文](./README.zh-CN.md) | [繁體中文](./README.zh-TW.md) | [日本語](./README.ja.md) | [한국어](./README.ko.md)
 
 
 
