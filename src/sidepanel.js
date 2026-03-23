@@ -226,7 +226,11 @@ async function sendMessage() {
     return;
   }
 
-  // 发送给 background.js 启动 Agent Loop
+  // 发送给 background.js 启动 Agent Loop（附带历史上下文，不含本次消息）
+  const conversationHistory = chatHistory
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .map((m) => ({ role: m.role, content: m.text }));
+
   chrome.runtime.sendMessage({
     type: "run_agent",
     userMessage: text,
@@ -236,6 +240,7 @@ async function sendMessage() {
     model: stored.model || "",
     maxTurns: stored.maxTurns ?? 60,
     language: currentLang,
+    conversationHistory,
   });
 }
 

@@ -902,14 +902,22 @@ function isLoginPage(pageResult) {
   }
 }
 
-async function runAgentLoop(userMessage, tabId, apiKey, baseUrl, model, maxTurnsConfig, language = "zh-CN") {
+async function runAgentLoop(userMessage, tabId, apiKey, baseUrl, model, maxTurnsConfig, language = "zh-CN", conversationHistory = []) {
   stopRequested = false;
   const s = bgT(language);
 
   const systemPrompt = getSystemPrompt(language);
 
+  // 取最近 5 轮（10 条）历史，只保留 user/assistant，跳过 error
+  const MAX_HISTORY_TURNS = 5;
+  const historyMessages = conversationHistory
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .slice(-MAX_HISTORY_TURNS * 2)
+    .map((m) => ({ role: m.role, content: m.content }));
+
   const messages = [
     { role: "system", content: systemPrompt },
+    ...historyMessages,
     { role: "user", content: userMessage },
   ];
 
@@ -1254,8 +1262,8 @@ function formatStepLabel(toolName, params, s) {
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "run_agent") {
-    const { userMessage, tabId, apiKey, baseUrl, model, maxTurns, language } = message;
-    runAgentLoop(userMessage, tabId, apiKey, baseUrl, model, maxTurns, language).catch((e) => {
+    const { userMessage, tabId, apiKey, baseUrl, model, maxTurns, language, conversationHistory } = message;
+    runAgentLoop(userMessage, tabId, apiKey, baseUrl, model, maxTurns, language, conversationHistory || []).catch((e) => {
       sendProgress("error", bgT(language).agent_error(e.message), tabId);
     });
     sendResponse({ started: true });
